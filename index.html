@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script>window.addEventListener("load",()=>{if(typeof ChartDataLabels!=="undefined")Chart.register(ChartDataLabels);});</script>
 <style>
 :root{
   --rg:#C8927A; --rg2:#D9A898; --sono:#5C5248;
@@ -286,6 +287,14 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 .page-section{display:none}
 .page-section.active{display:block}
 select{font-family:inherit}
+/* ── 달력 심사구분별 색상 ── */
+.cal-ev-정기  {background:linear-gradient(135deg,#EEF3F8,#E5EDF7);color:#3A5F82;border-color:#C8D8EC;border-left-color:#5B7FA6}
+.cal-ev-인정  {background:linear-gradient(135deg,#F8F0EE,#F3E8E4);color:#7A4840;border-color:#E8C8C0;border-left-color:#C87868}
+.cal-ev-특수  {background:linear-gradient(135deg,#F0EDF8,#E8E3F5);color:#5A4080;border-color:#D0C4EC;border-left-color:#8A75B0}
+.cal-ev-특별  {background:linear-gradient(135deg,#FEF8EC,#FAF0D8);color:#7A6020;border-color:#EADCB0;border-left-color:#C8A840}
+.cal-ev-수시  {background:linear-gradient(135deg,#EEF8EE,#E4F3E4);color:#306830;border-color:#C0E0C0;border-left-color:#5A9A5A}
+.cal-ev-sim   {background:linear-gradient(135deg,#F7F3ED,#EFE7DC);color:#6A5030;border-color:#E0D0B8;border-left-color:#8A6B3A}
+
 /* ── SET 묶음 심사 ── */
 .set-group-a td{background:#F5F8FE !important}
 .set-group-b td{background:#F8F5FE !important}
@@ -483,7 +492,7 @@ select{font-family:inherit}
             <div class="stat-val" id="stat-val-total">—</div>
             <div class="stat-hint">단위: 회</div>
           </div>
-          <div class="stat-card red clickable" onclick="openFailDrawer()" style="cursor:pointer">
+          <div class="stat-card red clickable" onclick="doOpenFailDrawer()" style="cursor:pointer">
             <div class="stat-top-border"></div>
             <div class="stat-card-top"><span class="stat-label">불합격 <i class="ti ti-external-link" style="font-size:10px;margin-left:3px;opacity:.5"></i></span><div class="stat-icon"><i class="ti ti-x" style="font-size:16px"></i></div></div>
             <div class="stat-val" id="stat-val-fail">—</div>
@@ -495,7 +504,7 @@ select{font-family:inherit}
             <div class="stat-val" id="stat-val-pass">—</div>
             <div class="stat-hint" id="stat-val-pass-cnt"></div>
           </div>
-          <div class="stat-card amber clickable" onclick="openExaminerDrawer()" style="cursor:pointer">
+          <div class="stat-card amber clickable" onclick="doOpenExaminerDrawer()" style="cursor:pointer">
             <div class="stat-top-border"></div>
             <div class="stat-card-top"><span class="stat-label">위촉심사관 투입 <i class="ti ti-external-link" style="font-size:10px;margin-left:3px;opacity:.5"></i></span><div class="stat-icon"><i class="ti ti-users" style="font-size:16px"></i></div></div>
             <div class="stat-val" id="stat-val-exam">—</div>
@@ -565,7 +574,7 @@ select{font-family:inherit}
           </div>
           <div class="filter-item">
             <div class="search-input"><i class="ti ti-search"></i>
-              <input id="qualm-search" placeholder="이름 또는 사번 검색" oninput="renderQualm()">
+              <input id="qualm-search" placeholder="이름 또는 사번 검색" oninput="renderQualm()" onkeyup="renderQualm()">
             </div>
           </div>
           <div class="filter-divider"></div>
@@ -920,13 +929,13 @@ select{font-family:inherit}
       <div class="form-grid" style="margin-bottom:12px">
         <div class="form-group">
           <label class="form-label">SIM / LINE</label>
-          <select class="form-control" id="fm-simline">
+          <select class="form-control" id="fm-simline" onchange="updateExaminerDatalistByContext()">
             <option value="">선택</option><option>LINE</option><option>SIM</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">기종</label>
-          <select class="form-control" id="fm-ac">
+          <select class="form-control" id="fm-ac" onchange="updateExaminerDatalistByContext()">
             <option value="">선택</option><option>A330</option><option>B737</option><option>B777</option>
           </select>
         </div>
@@ -939,7 +948,7 @@ select{font-family:inherit}
             <option>LIP임무수행능력검증</option>
           </select>
         </div>
-        <div class="form-group" id="fm-subtype-wrap">
+        <div class="form-group" id="fm-subtype-wrap" style="display:none">
           <label class="form-label">세부구분</label>
           <select class="form-control" id="fm-subtype">
             <option value="">선택</option>
@@ -1085,63 +1094,63 @@ const qualmDB = [
 // 심사관 데이터 (심사기록부_통합 기반 — LINE/SIM 횟수 + 소속)
 const examinerDB = [
   // ── 사내 위촉심사관 (LINE) ──
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김연욱',  sim:false,line:true, period:'',status:'활동중',lineCnt:255,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180451',name:'김연욱',  sim:false,line:true, period:'2023-02-14~2027-02-13',status:'활동중',lineCnt:255,simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김동영',  sim:false,line:true, period:'',status:'활동중',lineCnt:252,simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이진수',  sim:false,line:true, period:'',status:'활동중',lineCnt:246,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'조중민',  sim:false,line:true, period:'',status:'활동중',lineCnt:239,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190046',name:'조중민',  sim:false,line:true, period:'2023-06-22~2027-06-21',status:'활동중',lineCnt:239,simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'문승규',  sim:false,line:true, period:'',status:'활동중',lineCnt:199,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'박세종',  sim:false,line:true, period:'',status:'활동중',lineCnt:194,simCnt:1},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150204',name:'박세종',  sim:false,line:true, period:'2023-11-03~2026-11-02',status:'활동중',lineCnt:194,simCnt:1},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이원석',  sim:false,line:true, period:'',status:'활동중',lineCnt:179,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'신건우',  sim:false,line:true, period:'',status:'활동중',lineCnt:174,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180025',name:'신건우',  sim:false,line:true, period:'2024-03-11~2027-03-10',status:'활동중',lineCnt:174,simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'안광명',  sim:false,line:true, period:'',status:'활동중',lineCnt:170,simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이수준',  sim:false,line:true, period:'',status:'활동중',lineCnt:152,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'박수호',  sim:false,line:true, period:'',status:'활동중',lineCnt:148,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'정정욱',  sim:false,line:true, period:'',status:'활동중',lineCnt:143,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150205',name:'박수호',  sim:false,line:true, period:'2024-03-27~2027-03-26',status:'활동중',lineCnt:148,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150283',name:'정정욱',  sim:false,line:true, period:'2024-06-17~2027-06-16',status:'활동중',lineCnt:143,simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'강태구',  sim:false,line:true, period:'',status:'활동중',lineCnt:121,simCnt:2},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'홍철의',  sim:false,line:true, period:'',status:'활동중',lineCnt:123,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'지현식',  sim:false,line:true, period:'',status:'활동중',lineCnt:111,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김동욱',  sim:false,line:true, period:'',status:'활동중',lineCnt:108,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180341',name:'홍철의',  sim:false,line:true, period:'2024-06-11~2027-06-10',status:'활동중',lineCnt:123,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T140136',name:'지현식',  sim:false,line:true, period:'2024-06-21~2027-06-20',status:'활동중',lineCnt:111,simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T160380',name:'김동욱',  sim:false,line:true, period:'2024-06-11~2027-06-10',status:'활동중',lineCnt:108,simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'고영균',  sim:false,line:true, period:'',status:'활동중',lineCnt:106,simCnt:1},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'최명순',  sim:false,line:true, period:'',status:'활동중',lineCnt:96, simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'정연태',  sim:false,line:true, period:'',status:'활동중',lineCnt:86, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'심수철',  sim:false,line:true, period:'',status:'활동중',lineCnt:53, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'송호석',  sim:false,line:true, period:'',status:'활동중',lineCnt:50, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김재진',  sim:false,line:true, period:'',status:'활동중',lineCnt:49, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김재호',  sim:false,line:true, period:'',status:'활동중',lineCnt:47, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220100',name:'심수철',  sim:false,line:true, period:'2025-04-25~2028-04-24',status:'활동중',lineCnt:53, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180024',name:'송호석',  sim:false,line:true, period:'2025-06-04~2028-06-03',status:'활동중',lineCnt:50, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180342',name:'김재진',  sim:false,line:true, period:'2025-06-02~2028-06-01',status:'활동중',lineCnt:49, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220068',name:'김재호',  sim:false,line:true, period:'2025-06-05~2028-06-04',status:'활동중',lineCnt:47, simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김치혁',  sim:false,line:true, period:'',status:'활동중',lineCnt:43, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이용휘',  sim:false,line:true, period:'',status:'활동중',lineCnt:40, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'임동균',  sim:false,line:true, period:'',status:'활동중',lineCnt:35, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김종욱',  sim:false,line:true, period:'',status:'활동중',lineCnt:29, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220188',name:'이용휘',  sim:false,line:true, period:'2025-05-28~2028-05-27',status:'활동중',lineCnt:40, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220106',name:'임동균',  sim:false,line:true, period:'2025-06-27~2028-06-26',status:'활동중',lineCnt:35, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220104',name:'김종욱',  sim:false,line:true, period:'2025-06-23~2028-06-22',status:'활동중',lineCnt:29, simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'황태인',  sim:false,line:true, period:'',status:'활동중',lineCnt:26, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'정민철',  sim:false,line:true, period:'',status:'활동중',lineCnt:26, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'박기완',  sim:false,line:true, period:'',status:'활동중',lineCnt:23, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'최동열',  sim:false,line:true, period:'',status:'활동중',lineCnt:12, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190172',name:'정민철',  sim:false,line:true, period:'2025-04-11~2028-04-10',status:'활동중',lineCnt:26, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220063',name:'박기완',  sim:false,line:true, period:'2025-04-11~2028-04-10',status:'활동중',lineCnt:23, simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190045',name:'최동열',  sim:false,line:true, period:'2026-01-23~2029-01-22',status:'활동중',lineCnt:12, simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'백흠주',  sim:false,line:true, period:'',status:'활동중',lineCnt:4,  simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김영현',  sim:false,line:true, period:'',status:'활동중',lineCnt:3,  simCnt:0},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150195',name:'김영현',  sim:false,line:true, period:'2025-10-24~2028-10-23',status:'활동중',lineCnt:3,  simCnt:0},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'최영문',  sim:false,line:true, period:'',status:'활동중',lineCnt:1,  simCnt:0},
   // ── 사내 위촉심사관 (SIM) ──
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김경환',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:229},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김웅',    sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:228},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220041',name:'김경환',  sim:true, line:false,period:'2024-03-13~2027-03-12',status:'활동중',lineCnt:0,  simCnt:229},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T160147',name:'김웅',    sim:true, line:false,period:'2026-04-13~2029-04-12',status:'활동중',lineCnt:0,  simCnt:228},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'황재선',  sim:true, line:true, period:'',status:'활동중',lineCnt:2,  simCnt:224},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'조재하',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:132},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'장세하',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:128},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T170037',name:'조재하',  sim:true, line:false,period:'2024-05-01~2027-04-30',status:'활동중',lineCnt:0,  simCnt:132},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T110043',name:'장세하',  sim:true, line:false,period:'2025-08-11~2026-08-10',status:'활동중',lineCnt:0,  simCnt:128},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'류강원',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:121},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이희복',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:108},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'윤진',    sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:107},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240217',name:'이희복',  sim:true, line:false,period:'2024-10-25~2027-10-24',status:'활동중',lineCnt:0,  simCnt:108},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240216',name:'윤진',    sim:true, line:false,period:'2024-10-25~2027-10-24',status:'활동중',lineCnt:0,  simCnt:107},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'하승홍',  sim:true, line:true, period:'',status:'활동중',lineCnt:2,  simCnt:100},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'오승진',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:86},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이갑규',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:83},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'장경식',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:74},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190089',name:'장경식',  sim:true, line:false,period:'2024-09-17~2027-09-16',status:'활동중',lineCnt:0,  simCnt:74},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'부장윤',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:65},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'박원',    sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:60},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'우광하',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:56},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240434',name:'박원',    sim:true, line:false,period:'2025-06-17~2028-06-16',status:'활동중',lineCnt:0,  simCnt:60},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240433',name:'우광하',  sim:true, line:false,period:'2025-06-17~2028-06-16',status:'활동중',lineCnt:0,  simCnt:56},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'정호성',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:53},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'길호진',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:36},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김민수',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:25},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'장기상',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:18},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T230110',name:'김민수',  sim:true, line:false,period:'2024-09-17~2027-09-16',status:'활동중',lineCnt:0,  simCnt:25},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220101',name:'장기상',  sim:true, line:false,period:'2025-04-04~2028-04-03',status:'활동중',lineCnt:0,  simCnt:18},
   {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'곽기훈',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:13},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'임원재',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:6},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'정경진',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:5},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220107',name:'임원재',  sim:true, line:false,period:'2025-04-03~2028-04-02',status:'활동중',lineCnt:0,  simCnt:6},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220062',name:'정경진',  sim:true, line:false,period:'2025-04-03~2028-04-02',status:'활동중',lineCnt:0,  simCnt:5},
   // ── CAE 소속 SIM 심사관 ──
   {ac:'A330',type:'CAE 심사관',     role:'기장',empid:'',name:'민경장',  sim:true, line:true, period:'',status:'활동중',lineCnt:1,  simCnt:138},
   {ac:'A330',type:'CAE 심사관',     role:'기장',empid:'',name:'민경식',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:38},
@@ -1234,6 +1243,9 @@ function selectProfile(id) {
   initAllSelects();
   setTimeout(()=>{ if(typeof updateExaminerDatalist==='function') updateExaminerDatalist(); }, 200);
   nav('stat');
+  // result month label 초기화
+  const _rl=$('result-month-label');
+  if(_rl) _rl.textContent=`${resultYear}년 ${resultMonth}월`;
   // localStorage 데이터가 있으면 로드 후 현재 페이지 갱신
   if(DB.length > 0) {
     // 이미 loadFromStorage()로 로드됨 - 상태 표시만
@@ -1256,7 +1268,7 @@ function goProfile() {
 // ══════════════════════════════════════════════════════════════════
 // ④ 셀렉트 초기화
 // ══════════════════════════════════════════════════════════════════
-const SELECT_IDS = ['stat-ac','qualm-ac','plan-ac','cal-ac','result-ac','record-ac','examiner-ac'];
+const SELECT_IDS = ['stat-ac','qualm-ac','plan-ac','cal-ac','result-ac','record-ac','examiner-ac','crew-ac'];
 function initAllSelects() {
   SELECT_IDS.forEach(id => {
     const el = $(id); if (!el) return;
@@ -1369,77 +1381,7 @@ function onStatAcChange() {
   calcAndDrawStat($('stat-ac').value);
 }
 
-function calcAndDrawStat(ac) {
-  const range = PERIOD_RANGES[statMode]?.[statPeriodKey];
-  if (!range) return;
-  const rows = dbFilter(ac, range);
 
-  // 상단 sub 업데이트
-  $('top-sub').textContent = statPeriodKey;
-
-  // KPI
-  const total = rows.length;
-  const fails = rows.filter(r=>r.result==='불합격').length;
-  const passes = rows.filter(r=>r.result==='합격').length;
-  const passRate = total>0 ? Math.round(passes/total*100) : 0;
-  const examiners = [...new Set(rows.map(r=>r.examiner))].length;
-
-  $('stat-val-total').textContent = total;
-  $('stat-val-fail').textContent  = fails;
-  $('stat-val-fail-pct').textContent = total>0 ? Math.round(fails/total*100)+'%' : '0%';
-  $('stat-val-pass').textContent  = passRate+'%';
-  $('stat-val-pass-cnt').textContent = passes+'건 합격';
-  $('stat-val-exam').textContent  = examiners;
-
-  // 미입력 배지
-  const pending = rows.filter(r=>r.result==='').length;
-  $('badge-result').textContent = pending;
-  $('badge-result').style.display = pending>0?'inline':'none';
-
-  // 차트 데이터 계산
-  // 1) 구분별 현황 (subtype × LINE/SIM)
-  const subtypes = ['기장 정기','기장 인정','부기장 정기','부기장 인정','위촉심사관 정기','LIP'];
-  const lineData = subtypes.map(s=>rows.filter(r=>r.simline==='LINE'&&r.subtype===s).length);
-  const simData  = subtypes.map(s=>rows.filter(r=>r.simline==='SIM' &&r.subtype===s).length);
-
-  // 2) LINE vs SIM
-  const lineTotal = rows.filter(r=>r.simline==='LINE').length;
-  const simTotal  = rows.filter(r=>r.simline==='SIM').length;
-
-  // 3) 합/불 월별 추이
-  const months = getMonthsInRange(range);
-  const passMonthly = months.map(m=>rows.filter(r=>r.date.startsWith(m)&&r.result==='합격').length);
-  const failMonthly = months.map(m=>rows.filter(r=>r.date.startsWith(m)&&r.result==='불합격').length);
-  const monthLabels = months.map(m=>{ const [y,mo]=m.split('-'); return mo+'월'; });
-
-  // 4) 정기/인정/기타
-  const jeongi  = rows.filter(r=>r.type==='정기').length;
-  const injung  = rows.filter(r=>r.type==='인정').length;
-  const gita    = rows.filter(r=>r.type!=='정기'&&r.type!=='인정').length;
-
-  updateChart('chart-examiner','bar',
-    subtypes, [
-      {label:'LINE',data:lineData,backgroundColor:'rgba(91,127,166,.75)',borderRadius:4},
-      {label:'SIM', data:simData, backgroundColor:'rgba(138,107,58,.65)',borderRadius:4},
-    ],
-    {scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#F0EAE4'},ticks:{font:{size:10}}}}}
-  );
-  updateChart('chart-type','doughnut',
-    ['LINE (항공기)','SIM (시뮬레이터)'],
-    [{data:[lineTotal,simTotal],backgroundColor:['rgba(91,127,166,.8)','rgba(138,107,58,.7)'],borderWidth:0}]
-  );
-  updateChart('chart-pass','line',
-    monthLabels,[
-      {label:'합격',data:passMonthly,borderColor:'#6A9B70',backgroundColor:'rgba(106,155,112,.1)',tension:.4,fill:true,pointRadius:4},
-      {label:'불합격',data:failMonthly,borderColor:'#B05858',backgroundColor:'rgba(176,88,88,.08)',tension:.4,fill:true,pointRadius:4},
-    ],
-    {scales:{x:{grid:{display:false},ticks:{font:{size:10}}},y:{grid:{color:'#F0EAE4'},ticks:{font:{size:10}}}}}
-  );
-  updateChart('chart-kind','pie',
-    ['정기심사','인정심사','기타'],
-    [{data:[jeongi,injung,gita],backgroundColor:['rgba(88,101,163,.75)','rgba(154,88,80,.7)','rgba(176,176,160,.6)'],borderWidth:0}]
-  );
-}
 
 function getMonthsInRange([start, end]) {
   const months = [];
@@ -1759,7 +1701,11 @@ document.addEventListener('click', e=>{
 function openPlanModal() {
   const acSel=$('plan-ac')?.value;
   $('fm-ac').value=(acSel&&acSel!=='전체')?acSel:(currentUser?.ac||'');
+  if(!$('fm-ac').value&&currentUser?.ac) $('fm-ac').value=currentUser.ac;
   $('fm-date').value=`${planYear}-${String(planMonth).padStart(2,'0')}-01`;
+  if($('fm-type')) $('fm-type').value='';
+  updateSubtypeOptions();
+  updateExaminerDatalistByContext();
   $('plan-modal').classList.add('open');
 }
 function closePlanModal() {
@@ -1770,7 +1716,7 @@ function closePlanModal() {
 function savePlanRow() {
   const g=id=>$(id).value.trim();
   const [simline,ac,type,subtype,empid,name,date]=[g('fm-simline'),g('fm-ac'),g('fm-type'),g('fm-subtype'),g('fm-empid'),g('fm-name'),g('fm-date')];
-  if (!simline||!ac||!type||!subtype||!empid||!name||!date){alert('필수 항목을 모두 입력하세요.');return;}
+  if (!simline||!ac||!type||!name||!date){alert('SIM/LINE, 기종, 심사종류, 이름, 심사일정은 필수입니다.');return;}
   DB.push({id:nextId++,simline,type,subtype,ac,qual:g('fm-qual'),empid,name,date,
     flight:g('fm-flight')||'—',examiner:g('fm-examiner')||'—',place:g('fm-place')||'—',note:g('fm-note'),result:''});
   closePlanModal(); renderPlan();
@@ -1946,6 +1892,22 @@ function updateExaminerDatalist() {
   const dl=document.getElementById('fm-examiner-list');
   if(!dl) return;
   dl.innerHTML=examinerDB.map(r=>`<option value="${r.name}">`).join('');
+}
+
+// 기종 + SIM/LINE 기준으로 심사관 필터링
+function updateExaminerDatalistByContext() {
+  const dl=document.getElementById('fm-examiner-list');
+  if(!dl) return;
+  const ac  = $('fm-ac')?.value  || '';
+  const sl  = $('fm-simline')?.value || '';
+  const filtered = examinerDB.filter(r=>{
+    const acOk  = !ac  || ac==='전체'  || r.ac===ac;
+    const slOk  = !sl  || sl==='전체'  ||
+      (sl==='SIM'  && r.sim)  ||
+      (sl==='LINE' && r.line);
+    return acOk && slOk;
+  });
+  dl.innerHTML = filtered.map(r=>`<option value="${r.name}">`).join('');
 }
 function resetExaminer() {
   $('examiner-ac').value=currentUser?.ac||'전체';
@@ -2258,17 +2220,16 @@ openFailDrawer = function() {
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
-        <td>${acDot(r.ac)}</td><td>${r.qual}</td><td>${r.empid}</td><td>${r.name}</td>
-        <td>${r.date}</td><td>${r.flight}</td><td>${r.examiner}</td>
+        <td>${acDot(r.ac)}</td><td>${r.qual||'—'}</td><td>${r.empid||'—'}</td><td>${r.name}</td>
+        <td>${r.date}</td><td>${r.flight&&r.flight!=='—'?r.flight:r.place||'—'}</td><td>${r.examiner||'—'}</td>
       </tr>`).join('');
-  // 드로어 → 모달로 표시
-  $('fail-drawer').classList.add('open');
+  // 직접 열기 (openDrawer 의존 제거)
+  const el=$('fail-drawer');
+  if(el){el.style.cssText='display:flex!important';el.classList.add('open');}
 };
 
 openExaminerDrawer = function() {
   const rows=_lastStatRows;
-  const hired=examinerDB.filter(e=>e.type==='사내 위촉심사관').map(e=>e.name);
-  // DB에서 실제 위촉심사관 이름도 추출
   const allExaminers=[...new Set(rows.map(r=>r.examiner).filter(n=>n&&n!=='—'))];
   const maxCnt=Math.max(1,...allExaminers.map(n=>rows.filter(r=>r.examiner===n).length));
   $('examiner-stat-sub').textContent=`${statPeriodKey} · 심사관별 심사 횟수 (클릭 시 상세)`;
@@ -2278,7 +2239,8 @@ openExaminerDrawer = function() {
     .map(({name,cnt})=>{
       const pct=rows.length>0?Math.round(cnt/rows.length*100):0;
       const barW=Math.round(cnt/maxCnt*100);
-      return `<div class="examiner-bar" onclick="openExaminerDetail('${name.replace(/'/g,"\\'")}')">
+      const safe=name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      return `<div class="examiner-bar" onclick="openExaminerDetail('${safe}')">
         <span class="examiner-bar-name">${name}</span>
         <div class="examiner-bar-track"><div class="examiner-bar-fill" style="width:${barW}%"></div></div>
         <span class="examiner-bar-cnt">${cnt}회</span>
@@ -2286,7 +2248,8 @@ openExaminerDrawer = function() {
         <i class="ti ti-chevron-right" style="font-size:12px;color:var(--hint)"></i>
       </div>`;
     }).join('');
-  $('examiner-stat-drawer').classList.add('open');
+  const el=$('examiner-stat-drawer');
+  if(el){el.style.cssText='display:flex!important';el.classList.add('open');}
 };
 </script>
 
@@ -2860,6 +2823,144 @@ autoFillEmpid = function(nameId, empidId) {
 // ══════════════════════════════════════════════════════════════════
 
 
+// ══════════════════════════════════════════════════════════════════
+// 달력 - 심사구분별 색상 + 상세정보 표시 (최종 override)
+// ══════════════════════════════════════════════════════════════════
+renderCal = function() {
+  const ac=$('cal-ac')?.value||'전체';
+  $('cal-title').textContent=`${calYear}년 ${calMonth}월`;
+  $('top-sub').textContent=`${calYear}년 ${calMonth}월`;
+  const ym=`${calYear}-${String(calMonth).padStart(2,'0')}`;
+  const events=DB.filter(r=>(ac==='전체'||r.ac===ac)&&r.date.startsWith(ym));
+  const first=new Date(calYear,calMonth-1,1).getDay();
+  const last=new Date(calYear,calMonth,0).getDate();
+  const today=new Date();
+  const todayStr=`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  function normalizeSubForGroup(sub) {
+    const s=(sub||'').split('(')[0].trim();
+    return(s===''||s==='기타'||s==='기량'||s==='지식')?'__common__':s;
+  }
+  function groupDay(dayEvs) {
+    const map={};
+    dayEvs.forEach(e=>{
+      const subKey=normalizeSubForGroup(e.subtype);
+      const k=`${e.examiner}|${e.simline}|${e.type}|${subKey}|${e.simline==='LINE'?(e.flight||''):(e.place||'')}`;
+      if(!map[k]) map[k]={base:e,persons:[],procs:new Set()};
+      map[k].persons.push(e);
+      const proc=(e.subtype||'').match(/\(([^)]+)\)/)?.[1]||e.process||'';
+      if(proc==='지식'||proc==='기량') map[k].procs.add(proc);
+    });
+    return Object.values(map);
+  }
+  function getCalEvCls(e) {
+    if(e.simline==='SIM') return 'sim';
+    const t=e.type||'';
+    if(t==='인정') return '인정';
+    if(t==='특수') return '특수';
+    if(t==='특별') return '특별';
+    if(t==='수시') return '수시';
+    return '정기';
+  }
+
+  let cells='', cnt=1;
+  for(let i=0;i<42;i++){
+    const other=i<first||cnt>last;
+    const d=other?null:cnt;
+    const dateStr=d?`${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`:'';
+    const isToday=dateStr===todayStr;
+    const dayEvs=d?events.filter(e=>parseInt(e.date.split('-')[2])===d):[];
+    const groups=groupDay(dayEvs);
+
+    const evHtml=groups.map(g=>{
+      const e=g.base;
+      const n=g.persons.length;
+      const cls=getCalEvCls(e);
+      const typeLabel=e.simline==='SIM'?`SIM·${e.type||''}`:e.type||'';
+      const subBase=(e.subtype||'').split('(')[0].trim();
+      const subtypeDisp=subBase&&subBase!=='기타'?subBase:'';
+      const procArr=[...g.procs];
+      const procStr=procArr.length>1?'지식+기량':procArr.length===1?procArr[0]:'';
+      const personsStr=g.persons.map(p=>{
+        const q=p.qual==='기장'?'C':p.qual==='부기장'?'F':p.qual?p.qual.substring(0,2):'';
+        return `${p.name}${q?' '+q:''}`;
+      }).join(' · ');
+      const examShort=e.examiner&&e.examiner!=='—'?e.examiner.split(' ')[0]:'';
+      const flight=e.simline==='LINE'&&e.flight&&e.flight!=='—'?e.flight:'';
+      const ids=g.persons.map(p=>p.id).join(',');
+      return `<div class="cal-event cal-ev-${cls}" onclick="showCalGroupPopup(event,[${ids}])">
+        <div class="cal-ev-type" style="font-size:9px;font-weight:800;opacity:.8">
+          ${typeLabel}${subtypeDisp?' · '+subtypeDisp:''}${procStr?' ('+procStr+')':''}
+        </div>
+        <div class="cal-ev-name" style="white-space:normal;line-height:1.35;font-size:10px;font-weight:700">${personsStr}</div>
+        ${flight?`<div class="cal-ev-meta">✈ ${flight}</div>`:''}
+        ${examShort?`<div class="cal-ev-examiner">👤 ${examShort}</div>`:''}
+      </div>`;
+    }).join('');
+
+    cells+=`<div class="cal-cell${other?' other-month':''}${isToday?' today':''}">
+      <div class="cal-day"><span class="cal-day-num">${d||''}</span></div>
+      ${evHtml}
+    </div>`;
+    if(!other) cnt++;
+  }
+  $('cal-body').innerHTML=cells;
+};
+
+// ══════════════════════════════════════════════════════════════════
+// 통계 팝업 - doOpen* (완전히 독립, override 없음)
+// ══════════════════════════════════════════════════════════════════
+function doOpenFailDrawer() {
+  const range=PERIOD_RANGES[statMode]?.[statPeriodKey];
+  const ac=$('stat-ac')?.value||'전체';
+  let all=(typeof _lastStatRows!=='undefined'&&_lastStatRows.length>0)
+    ?_lastStatRows:dbFilter(ac,range)||[];
+  const rows=all.filter(r=>r.result==='불합격');
+  const sub=$('fail-drawer-sub');
+  if(sub) sub.textContent=`${statPeriodKey||''} · 불합격 ${rows.length}건`;
+  const tbody=$('fail-drawer-tbody');
+  if(tbody) tbody.innerHTML=rows.length===0
+    ?`<tr><td colspan="10" class="empty-state">불합격 심사 없음</td></tr>`
+    :rows.map((r,i)=>`<tr>
+        <td>${i+1}</td>
+        <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
+        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
+        <td>${r.subtype||'—'}</td><td>${acDot(r.ac)}</td>
+        <td>${r.qual||'—'}</td><td>${r.empid||'—'}</td><td>${r.name}</td>
+        <td>${r.date}</td><td>${r.examiner||'—'}</td>
+      </tr>`).join('');
+  const el=$('fail-drawer');
+  if(el){el.style.display='flex';el.classList.add('open');}
+}
+
+function doOpenExaminerDrawer() {
+  const range=PERIOD_RANGES[statMode]?.[statPeriodKey];
+  const ac=$('stat-ac')?.value||'전체';
+  const rows=(typeof _lastStatRows!=='undefined'&&_lastStatRows.length>0)
+    ?_lastStatRows:dbFilter(ac,range)||[];
+  const examMap={};
+  rows.forEach(r=>{const e=r.examiner||'—';if(e!=='—') examMap[e]=(examMap[e]||0)+1;});
+  const sorted=Object.entries(examMap).sort((a,b)=>b[1]-a[1]);
+  const maxCnt=sorted.length?sorted[0][1]:1;
+  const sub=$('examiner-stat-sub');
+  if(sub) sub.textContent=`${statPeriodKey||''} · 심사관별 심사 횟수`;
+  const list=$('examiner-bar-list');
+  if(list) list.innerHTML=sorted.map(([name,cnt])=>{
+    const pct=rows.length>0?Math.round(cnt/rows.length*100):0;
+    const bw=Math.round(cnt/maxCnt*100);
+    const safe=name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return `<div class="examiner-bar" onclick="openExaminerDetail('${safe}')">
+      <span class="examiner-bar-name" style="min-width:70px;font-size:11px">${name}</span>
+      <div class="examiner-bar-track"><div class="examiner-bar-fill" style="width:${bw}%"></div></div>
+      <span class="examiner-bar-cnt">${cnt}회</span>
+      <span style="font-size:10px;color:var(--muted);min-width:36px;text-align:right">${pct}%</span>
+      <i class="ti ti-chevron-right" style="font-size:12px;color:var(--hint)"></i>
+    </div>`;
+  }).join('');
+  const el=$('examiner-stat-drawer');
+  if(el){el.style.display='flex';el.classList.add('open');}
+}
+
 function openExaminerModal() {
   $('ex-ac').value = (currentUser?.ac!=='전체' ? currentUser?.ac : '') || '';
   ['ex-type','ex-role','ex-empid','ex-name','ex-period'].forEach(id=>{const el=$(id);if(el)el.value='';});
@@ -2920,13 +3021,15 @@ renderQualm = function() {
   const status = $('qualm-status')?.value||'전체';
 
   // qualmDB에 simline 필드가 없으면 디폴트 LINE 처리
+  const kw = ($('qualm-search')?.value||'').trim().toLowerCase();
   const rows = qualmDB
     .map(r=>({...r, status: calcQualmStatus(r.qualmYm), simline: r.simline||'LINE'}))
     .filter(r=>
       (ac==='전체'||r.ac===ac) &&
       (role==='전체'||r.role===role) &&
       (qualmSL==='전체'||r.simline===qualmSL) &&
-      (status==='전체'||r.status===status)
+      (status==='전체'||r.status===status) &&
+      (!kw||((r.name||'').toLowerCase().includes(kw)||(r.empid||'').toLowerCase().includes(kw)))
     );
 
   const alertCnt = qualmDB
@@ -2946,11 +3049,11 @@ renderQualm = function() {
   const rowCls = s => s==='만료됨'?'qualm-row-expired':s==='만료임박'?'qualm-row-imminent':'';
 
   $('qualm-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="11" class="empty-state">해당 조건의 데이터가 없습니다</td></tr>`
+    ? `<tr><td colspan="10" class="empty-state">해당 조건의 데이터가 없습니다</td></tr>`
     : rows.map((r,i)=>`<tr class="${rowCls(r.status)}">
         <td>${i+1}</td><td>${acDot(r.ac)}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td>${r.role}</td><td>${r.empid}</td><td>${r.name}</td><td>${r.qual}</td>
+        <td>${r.role}</td><td>${r.empid}</td><td>${r.name}</td>
         <td>${r.lastDate}</td><td>${r.qualmYm}</td><td>${r.expDate}</td>
         <td><span class="badge-tag ${statusCls(r.status)}">${r.status}</span></td>
       </tr>`).join('');
@@ -3192,9 +3295,10 @@ calcAndDrawStat = function(ac) {
   const passes = rows.filter(r=>r.result==='합격').length;
   const passRate = total>0 ? Math.round(passes/total*100) : 0;
 
-  // 위촉심사관 = 자격이 '위촉심사관'인 행 (업로드 DB 기반)
-  const hiredRows = rows.filter(r=>r.qual==='위촉심사관');
-  const hiredPct  = total>0 ? Math.round(hiredRows.length/total*100) : 0;
+  // 위촉심사관 투입 = 사내 위촉심사관(examinerDB)이 담당한 심사 횟수
+  const hiredNames = examinerDB.filter(e=>e.type==='사내 위촉심사관').map(e=>e.name);
+  const hiredRows  = rows.filter(r=>r.examiner&&hiredNames.includes(r.examiner));
+  const hiredPct   = total>0 ? Math.round(hiredRows.length/total*100) : 0;
   const examinerCount = [...new Set(rows.map(r=>r.examiner).filter(e=>e&&e!=='—'))].length;
 
   $('stat-val-total').textContent = total;
@@ -3261,10 +3365,17 @@ function openExaminerDetail(name) {
 }
 
 function closeDrawer(id) {
-  // id가 'fail' → 'fail-drawer', 'examiner-stat' → 'examiner-stat-drawer'
-  const elId = id.includes('-drawer') ? id : id+'-drawer';
+  const elId = id.endsWith('-drawer') ? id : id+'-drawer';
   const el = $(elId);
-  if(el) el.classList.remove('open');
+  if(el) {
+    el.classList.remove('open');
+    el.style.cssText = ''; // 인라인 스타일 완전 초기화
+  }
+}
+function openDrawer(id) {
+  const elId = id.endsWith('-drawer') ? id : id+'-drawer';
+  const el = $(elId);
+  if(el) { el.style.cssText='display:flex!important'; el.classList.add('open'); }
 }
 
 // ══════════════════════════════════════════════════════════════════
