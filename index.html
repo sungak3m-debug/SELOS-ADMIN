@@ -2198,19 +2198,58 @@ renderProfiles();
 // ══════════════════════════════════════════════════════════════════
 // Firestore 클라우드 영속 저장 + 실시간 동기화
 // (여러 담당자가 동시에 접속해도 자동으로 최신 데이터를 공유합니다)
+//
+// ⚠️ Firestore는 문서(document) 하나당 최대 1MB 제한이 있습니다.
+// 심사기록부 데이터가 많아지면 JSON 하나가 1MB를 넘을 수 있어서,
+// 큰 데이터는 여러 개의 작은 "청크" 문서로 쪼개 저장하고 불러올 때 합칩니다.
 // ══════════════════════════════════════════════════════════════════
 let _suppressSnapshot = false; // 내가 방금 쓴 내용을 onSnapshot이 즉시 되돌려 재렌더하지 않도록 방지
+const CHUNK_CHARS = 300000; // 한글이 섞여도 안전하게 1MB 밑으로 (UTF-8에서 한글 1자=3바이트 가정)
 
 function _setStatus(text, color) {
   const st=$('upload-status');
   if(st){ st.style.display='block'; if(color) st.style.color=color; st.textContent=text; }
 }
 
+// 큰 JSON 문자열을 여러 문서(청크)로 나눠 저장. 이전에 더 많은 청크가 있었으면 남는 것도 정리.
+async function saveChunkedDoc(baseName, jsonString) {
+  const chunks = [];
+  for (let i=0; i<jsonString.length; i+=CHUNK_CHARS) chunks.push(jsonString.slice(i, i+CHUNK_CHARS));
+  if (chunks.length===0) chunks.push(''); // 빈 데이터도 최소 1개 청크로 저장
+  const metaRef = cloudDB.collection(CLOUD_COLLECTION).doc(baseName+'_meta');
+  const prevMeta = await metaRef.get();
+  const prevCount = prevMeta.exists ? (prevMeta.data().chunkCount||0) : 0;
+  const savedAt = new Date().toISOString();
+  for (let i=0;i<chunks.length;i++){
+    await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).set({data: chunks[i]});
+  }
+  // 이전보다 청크 수가 줄었으면 남는 옛 청크 삭제
+  for (let i=chunks.length;i<prevCount;i++){
+    await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).delete().catch(()=>{});
+  }
+  await metaRef.set({chunkCount: chunks.length, savedAt});
+  return savedAt;
+}
+
+// 청크로 나뉜 문서를 다시 하나의 JSON 문자열로 합쳐서 불러오기
+async function loadChunkedDoc(baseName) {
+  const metaSnap = await cloudDB.collection(CLOUD_COLLECTION).doc(baseName+'_meta').get();
+  if (!metaSnap.exists) return null;
+  const count = metaSnap.data().chunkCount || 0;
+  const savedAt = metaSnap.data().savedAt || null;
+  let full = '';
+  for (let i=0;i<count;i++){
+    const snap = await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).get();
+    if (snap.exists) full += (snap.data().data||'');
+  }
+  return { data: full, savedAt, chunkCount: count };
+}
+
 async function saveToStorage() {
   try {
     _suppressSnapshot = true;
-    await cloudDB.collection(CLOUD_COLLECTION).doc('db').set({data: JSON.stringify(DB), savedAt: new Date().toISOString()});
-    await cloudDB.collection(CLOUD_COLLECTION).doc('qualm').set({data: JSON.stringify(qualmDB), savedAt: new Date().toISOString()});
+    await saveChunkedDoc('db', JSON.stringify(DB));
+    await saveChunkedDoc('qualm', JSON.stringify(qualmDB));
     const savedAt=new Date().toLocaleString('ko-KR');
     const st=$('upload-status');
     if(st&&st.style.display!=='none'&&!st.textContent.includes('☁️'))
@@ -2226,7 +2265,7 @@ async function saveToStorage() {
 async function saveExaminerToCloud() {
   try {
     _suppressSnapshot = true;
-    await cloudDB.collection(CLOUD_COLLECTION).doc('examiner').set({data: JSON.stringify(examinerDB), savedAt: new Date().toISOString()});
+    await saveChunkedDoc('examiner', JSON.stringify(examinerDB));
   } catch(e) {
     console.warn('cloud save (examiner) failed', e);
     alert('⚠️ 심사관 데이터 클라우드 저장 실패: ' + e.message);
@@ -2238,7 +2277,7 @@ async function saveExaminerToCloud() {
 async function saveCrewToCloud() {
   try {
     _suppressSnapshot = true;
-    await cloudDB.collection(CLOUD_COLLECTION).doc('crew').set({data: JSON.stringify(crewDB), savedAt: new Date().toISOString()});
+    await saveChunkedDoc('crew', JSON.stringify(crewDB));
   } catch(e) {
     console.warn('cloud save (crew) failed', e);
     alert('⚠️ 운항승무원 데이터 클라우드 저장 실패: ' + e.message);
@@ -2249,20 +2288,20 @@ async function saveCrewToCloud() {
 
 async function loadFromStorage() {
   try {
-    const dbSnap = await cloudDB.collection(CLOUD_COLLECTION).doc('db').get();
-    const qmSnap = await cloudDB.collection(CLOUD_COLLECTION).doc('qualm').get();
+    const dbResult = await loadChunkedDoc('db');
+    const qmResult = await loadChunkedDoc('qualm');
     let loaded = false, savedAt = null;
-    if (dbSnap.exists) {
-      const parsed = JSON.parse(dbSnap.data().data || '[]');
-      savedAt = dbSnap.data().savedAt;
+    if (dbResult) {
+      const parsed = JSON.parse(dbResult.data || '[]');
+      savedAt = dbResult.savedAt;
       if (parsed && parsed.length) {
         DB.splice(0, DB.length, ...parsed);
         nextId = Math.max(...parsed.map(r=>r.id||0)) + 1;
         loaded = true;
       }
     }
-    if (qmSnap.exists) {
-      const parsed = JSON.parse(qmSnap.data().data || '[]');
+    if (qmResult) {
+      const parsed = JSON.parse(qmResult.data || '[]');
       if (parsed && parsed.length) qualmDB.splice(0, qualmDB.length, ...parsed);
     }
     if (loaded && savedAt) {
@@ -2281,9 +2320,9 @@ async function loadFromStorage() {
 
 async function loadCrewFromCloud() {
   try {
-    const snap = await cloudDB.collection(CLOUD_COLLECTION).doc('crew').get();
-    if (snap.exists) {
-      const parsed = JSON.parse(snap.data().data || '[]');
+    const result = await loadChunkedDoc('crew');
+    if (result) {
+      const parsed = JSON.parse(result.data || '[]');
       if (parsed.length) crewDB.splice(0, crewDB.length, ...parsed);
     }
     renderCrew(); updateCrewDatalist();
@@ -2292,9 +2331,9 @@ async function loadCrewFromCloud() {
 
 async function loadExaminerFromCloud() {
   try {
-    const snap = await cloudDB.collection(CLOUD_COLLECTION).doc('examiner').get();
-    if (snap.exists) {
-      const parsed = JSON.parse(snap.data().data || '[]');
+    const result = await loadChunkedDoc('examiner');
+    if (result) {
+      const parsed = JSON.parse(result.data || '[]');
       if (parsed.length) examinerDB.splice(0, examinerDB.length, ...parsed);
     }
     renderExaminer();
@@ -2302,29 +2341,38 @@ async function loadExaminerFromCloud() {
 }
 
 // ── 실시간 동기화: 다른 담당자가 저장하면 자동으로 화면 갱신 ──
+// 청크가 여러 개라 개별 청크 문서 대신 "_meta" 문서(저장시각/청크수)의 변경을 감지해서 전체를 다시 불러옵니다.
 function setupRealtimeSync() {
-  cloudDB.collection(CLOUD_COLLECTION).doc('db').onSnapshot(snap=>{
+  cloudDB.collection(CLOUD_COLLECTION).doc('db_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const parsed = JSON.parse(snap.data().data || '[]');
+    const result = await loadChunkedDoc('db');
+    if(!result) return;
+    const parsed = JSON.parse(result.data || '[]');
     DB.splice(0, DB.length, ...parsed);
     renderRecord();renderPlan();renderResult();renderCal();
     calcAndDrawStat('전체');
   });
-  cloudDB.collection(CLOUD_COLLECTION).doc('qualm').onSnapshot(snap=>{
+  cloudDB.collection(CLOUD_COLLECTION).doc('qualm_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const parsed = JSON.parse(snap.data().data || '[]');
+    const result = await loadChunkedDoc('qualm');
+    if(!result) return;
+    const parsed = JSON.parse(result.data || '[]');
     qualmDB.splice(0, qualmDB.length, ...parsed);
     renderQualm();
   });
-  cloudDB.collection(CLOUD_COLLECTION).doc('crew').onSnapshot(snap=>{
+  cloudDB.collection(CLOUD_COLLECTION).doc('crew_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const parsed = JSON.parse(snap.data().data || '[]');
+    const result = await loadChunkedDoc('crew');
+    if(!result) return;
+    const parsed = JSON.parse(result.data || '[]');
     crewDB.splice(0, crewDB.length, ...parsed);
     renderCrew(); updateCrewDatalist();
   });
-  cloudDB.collection(CLOUD_COLLECTION).doc('examiner').onSnapshot(snap=>{
+  cloudDB.collection(CLOUD_COLLECTION).doc('examiner_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const parsed = JSON.parse(snap.data().data || '[]');
+    const result = await loadChunkedDoc('examiner');
+    if(!result) return;
+    const parsed = JSON.parse(result.data || '[]');
     examinerDB.splice(0, examinerDB.length, ...parsed);
     renderExaminer();
   });
