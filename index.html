@@ -206,6 +206,10 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 .table-title{font-size:12px;font-weight:700;color:var(--navy)}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
 .tbl th{background:#FAFAF8;font-size:10.5px;font-weight:700;color:var(--muted);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl th.sortable{cursor:pointer;user-select:none}
+.tbl th.sortable:hover{color:var(--rg)}
+.tbl th.sort-active{color:var(--rg)}
+
 .tbl td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:#FAF8F6}
@@ -540,6 +544,10 @@ select{font-family:inherit}
             <div class="stat-hint" id="stat-val-exam-pct"></div>
           </div>
         </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:5px">
+          <i class="ti ti-info-circle" style="font-size:13px"></i>
+          아래 4개 차트는 심사결과 관리 페이지에서 결과(합격/불합격)가 입력된 완료 심사만 반영해요. 결과 미입력 건은 제외됩니다.
+        </div>
         <div class="chart-grid">
           <div class="chart-card">
             <div class="chart-title">구분별 운항자격심사 현황</div>
@@ -642,10 +650,19 @@ select{font-family:inherit}
             </button>
             <div class="month-picker" id="plan-month-picker" style="display:none"></div>
           </div>
-          <div class="filter-item"><span class="filter-label">기종</span><select class="filter-select" id="plan-ac"></select></div>
+          <div class="filter-item"><span class="filter-label">기종</span><select class="filter-select" id="plan-ac" onchange="renderPlan()"></select></div>
           <div class="filter-item"><span class="filter-label">SIM/LINE</span>
-            <select class="filter-select" id="plan-simline"><option>전체</option><option>LINE</option><option>SIM</option></select>
+            <select class="filter-select" id="plan-simline" onchange="renderPlan()"><option>전체</option><option>LINE</option><option>SIM</option></select>
           </div>
+          <div class="filter-item"><span class="filter-label">심사종류</span>
+            <select class="filter-select" id="plan-type" onchange="renderPlan()"><option value="전체">전체</option><option>정기</option><option>인정</option><option>특수</option><option>특별</option><option>수시</option><option>사내</option></select>
+          </div>
+          <div class="filter-item"><span class="filter-label">자격</span>
+            <select class="filter-select" id="plan-qual" onchange="renderPlan()"><option value="전체">전체</option></select>
+          </div>
+          <div class="filter-item"><input class="filter-input" id="plan-search-empid" placeholder="사번 검색" style="width:90px" oninput="renderPlan()"></div>
+          <div class="filter-item"><input class="filter-input" id="plan-search-name" placeholder="이름 검색" style="width:90px" oninput="renderPlan()"></div>
+          <div class="filter-item"><input class="filter-input" id="plan-search-examiner" placeholder="심사관 검색" style="width:90px" oninput="renderPlan()"></div>
           <div class="filter-actions" style="margin-left:auto">
             <button class="btn btn-primary btn-sm" onclick="applyPlanFilter()"><i class="ti ti-search"></i> 조회</button>
             <button class="btn btn-outline btn-sm" onclick="resetPlanFilter()">초기화</button>
@@ -658,6 +675,7 @@ select{font-family:inherit}
           <span class="big-month-nav-title" id="plan-month-big">2026년 5월</span>
           <button class="big-month-nav-btn" onclick="planMonthNext()">›</button>
         </div>
+        <div id="plan-qual-summary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"></div>
         <div class="table-card">
           <div class="table-head"><span class="table-title">심사계획 목록</span>
             <button class="btn btn-primary btn-sm" id="plan-add-btn" onclick="openPlanModal()"><i class="ti ti-plus"></i> 추가</button>
@@ -665,9 +683,20 @@ select{font-family:inherit}
           <table class="tbl">
             <thead><tr>
               <th class="center"><input type="checkbox" id="plan-select-all" onchange="togglePlanSelectAll(this)"></th>
-              <th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>기종</th>
-              <th>자격</th><th>사번</th><th>이름</th><th>심사일정</th><th>편명/구간</th>
-              <th>심사관</th><th>심사장소</th><th>비고</th><th class="center">삭제</th>
+              <th>No</th>
+              <th class="sortable" ondblclick="togglePlanSort('simline')">SIM/LINE</th>
+              <th class="sortable" ondblclick="togglePlanSort('type')">심사종류</th>
+              <th>세부구분</th>
+              <th class="sortable" ondblclick="togglePlanSort('process')">과정</th>
+              <th class="sortable" ondblclick="togglePlanSort('ac')">기종</th>
+              <th class="sortable" ondblclick="togglePlanSort('qual')">자격</th>
+              <th class="sortable" ondblclick="togglePlanSort('empid')">사번</th>
+              <th class="sortable" ondblclick="togglePlanSort('name')">이름</th>
+              <th class="sortable" ondblclick="togglePlanSort('date')">심사일정</th>
+              <th>편명/구간</th>
+              <th class="sortable" ondblclick="togglePlanSort('examiner')">심사관</th>
+              <th>심사장소</th><th>비고</th>
+              <th class="center">수정</th><th class="center">삭제</th>
             </tr></thead>
             <tbody id="plan-tbody"></tbody>
           </table>
@@ -762,12 +791,22 @@ select{font-family:inherit}
         <div class="table-card">
           <div class="table-head">
             <span class="table-title">심사결과 입력 <span class="badge-num" id="result-pending-badge" style="margin-left:6px"></span></span>
+            <span style="font-size:10px;color:var(--muted);margin-left:8px"><span class="set-badge" style="font-size:8px;width:14px;height:14px;vertical-align:middle">S</span> = SET 심사 (기장+부기장 동반)</span>
           </div>
           <table class="tbl">
             <thead><tr>
-              <th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>기종</th>
-              <th>자격</th><th>사번</th><th>이름</th><th>심사일</th><th>편명/구간</th>
-              <th>심사관</th><th class="center">결과</th><th class="center">수정</th><th>비고</th>
+              <th>No</th>
+              <th class="sortable" ondblclick="toggleResultSort('simline')">SIM/LINE</th>
+              <th class="sortable" ondblclick="toggleResultSort('type')">심사종류</th>
+              <th>세부구분</th>
+              <th class="sortable" ondblclick="toggleResultSort('ac')">기종</th>
+              <th class="sortable" ondblclick="toggleResultSort('qual')">자격</th>
+              <th class="sortable" ondblclick="toggleResultSort('empid')">사번</th>
+              <th class="sortable" ondblclick="toggleResultSort('name')">이름</th>
+              <th class="sortable" ondblclick="toggleResultSort('date')">심사일</th>
+              <th>편명/구간</th>
+              <th class="sortable" ondblclick="toggleResultSort('examiner')">심사관</th>
+              <th class="center">결과</th><th class="center">수정</th><th>비고</th>
             </tr></thead>
             <tbody id="result-tbody"></tbody>
           </table>
@@ -826,7 +865,7 @@ select{font-family:inherit}
             <thead><tr>
               <th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>기종</th>
               <th>자격</th><th>사번</th><th>이름</th><th>심사일</th><th>편명/구간</th>
-              <th>심사관</th><th>심사장소</th><th class="center">결과</th>
+              <th>심사관</th><th>심사장소</th><th class="center">결과</th><th>비고</th>
             </tr></thead>
             <tbody id="record-tbody"></tbody>
           </table>
@@ -1024,13 +1063,19 @@ select{font-family:inherit}
     <div class="modal-header draggable" id="plan-modal-header">
       <div style="display:flex;flex-direction:column;gap:6px;flex:1">
         <div style="display:flex;align-items:center;gap:8px">
-          <span class="modal-title"><i class="ti ti-plus" style="margin-right:4px"></i>심사계획 추가</span>
+          <span class="modal-title" id="plan-modal-title-wrap"><i class="ti ti-plus" id="plan-modal-icon" style="margin-right:4px"></i><span id="plan-modal-title-text">심사계획 추가</span></span>
           <span class="drag-hint"><i class="ti ti-arrows-move" style="font-size:11px"></i>드래그로 이동</span>
         </div>
+        <input type="hidden" id="fm-edit-id" value="">
+        <input type="hidden" id="fm-edit-setid" value="">
         <div style="display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:2px;width:fit-content">
           <button class="qsl-btn active" id="add-mode-single" onclick="setAddMode('single')" style="font-size:11px;padding:3px 12px">단독 심사</button>
           <button class="qsl-btn" id="add-mode-set" onclick="setAddMode('set')" style="font-size:11px;padding:3px 12px">✈ SET 심사 (기장+부기장)</button>
         </div>
+        <button class="btn btn-outline btn-sm" onclick="togglePlanModalEligible()" style="width:fit-content;margin-top:4px">
+          <i class="ti ti-calendar-check" style="font-size:12px"></i> 이 달 적격자 확인
+        </button>
+        <div id="plan-modal-eligible-panel" style="display:none;max-height:160px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;margin-top:2px"></div>
       </div>
       <button class="modal-close" onclick="closePlanModal()">✕</button>
     </div>
@@ -1071,9 +1116,17 @@ select{font-family:inherit}
             <option>기량</option><option>지식</option><option>지식+기량</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="fm-date-single-wrap">
           <label class="form-label">심사일정</label>
           <input class="form-control" id="fm-date" type="date">
+        </div>
+        <div class="form-group" id="fm-date-know-wrap" style="display:none">
+          <label class="form-label">지식심사일정</label>
+          <input class="form-control" id="fm-date-know" type="date">
+        </div>
+        <div class="form-group" id="fm-date-skill-wrap" style="display:none">
+          <label class="form-label">기량심사일정</label>
+          <input class="form-control" id="fm-date-skill" type="date">
         </div>
         <div class="form-group">
           <label class="form-label">편명/구간</label>
@@ -1451,7 +1504,9 @@ function renderStat() {
 
 function updateStatPeriodOptions() {
   const sel = $('stat-period');
-  const opts = Object.keys(PERIOD_RANGES[statMode]||{});
+  const map = PERIOD_RANGES[statMode]||{};
+  // 시작일 기준 최신순으로 정렬 (Object 삽입 순서에 의존하지 않음)
+  const opts = Object.keys(map).sort((a,b)=> map[b][0].localeCompare(map[a][0]));
   sel.innerHTML = opts.map(o=>`<option value="${o}"${o===statPeriodKey?' selected':''}>${o}</option>`).join('');
   if (!opts.includes(statPeriodKey)) statPeriodKey = opts[0];
   sel.value = statPeriodKey;
@@ -1854,6 +1909,9 @@ function applyPlanFilter() { renderPlan(); }
 function resetPlanFilter() {
   $('plan-ac').value=currentUser?.ac||'전체';
   $('plan-simline').value='전체';
+  if($('plan-type')) $('plan-type').value='전체';
+  if($('plan-qual')) $('plan-qual').value='전체';
+  ['plan-search-empid','plan-search-name','plan-search-examiner'].forEach(id=>{if($(id))$(id).value='';});
   planYear=new Date().getFullYear(); planMonth=new Date().getMonth()+1; updateMonthLabel('plan'); renderPlan();
 }
 function exportPlanExcel() {
@@ -1922,6 +1980,10 @@ function closePlanModal() {
   $('plan-modal').classList.remove('open');
   ['fm-simline','fm-ac','fm-type','fm-subtype','fm-qual'].forEach(id=>$(id).value='');
   ['fm-empid','fm-name','fm-date','fm-flight','fm-examiner','fm-place','fm-note'].forEach(id=>$(id).value='');
+  ['fm-date-know','fm-date-skill','fm-process','fm-edit-id','fm-edit-setid'].forEach(id=>{if($(id))$(id).value='';});
+  const panel=$('plan-modal-eligible-panel'); if(panel) panel.style.display='none';
+  const icon=$('plan-modal-icon'); if(icon) icon.className='ti ti-plus';
+  const title=$('plan-modal-title-text'); if(title) title.textContent='심사계획 추가';
 }
 function savePlanRow() {
   const g=id=>$(id).value.trim();
@@ -1936,6 +1998,15 @@ function savePlanRow() {
 // ══════════════════════════════════════════════════════════════════
 // ⑨ 심사결과 관리
 // ══════════════════════════════════════════════════════════════════
+let resultSortCol = 'date', resultSortDir = 'asc';
+function toggleResultSort(col) {
+  if (resultSortCol === col) resultSortDir = resultSortDir==='asc' ? 'desc' : 'asc';
+  else { resultSortCol = col; resultSortDir = 'asc'; }
+  renderResult();
+}
+function updateResultNote(id, val) {
+  const row=DB.find(r=>r.id===id); if(row){ row.note = val; saveToStorage(); }
+}
 function renderResult() {
   const ac   = $('result-ac')?.value||'전체';
   const sl   = $('result-simline')?.value||'전체';
@@ -1946,12 +2017,22 @@ function renderResult() {
   // Month 표시를 항상 현재 상태와 동기화 (작은 버튼 + 큰 헤더 표시)
   const smallLbl=$('result-month-label'); if(smallLbl) smallLbl.textContent=`${ry}년 ${rm}월`;
   const bigLbl=$('result-month-big'); if(bigLbl) bigLbl.textContent=`${ry}년 ${rm}월`;
-  const rows = DB.filter(r=>
+  let rows = DB.filter(r=>
     (ac==='전체'||r.ac===ac) &&
     (sl==='전체'||r.simline===sl) &&
     (type==='ALL'||r.type===type) &&
     r.date.startsWith(ym)
   );
+  // 정렬: 기본 심사일 오름차순, 헤더 더블클릭으로 컬럼별 전환
+  rows = [...rows].sort((a,b)=>{
+    const va=(a[resultSortCol]??'').toString(), vb=(b[resultSortCol]??'').toString();
+    const cmp = va.localeCompare(vb, 'ko');
+    return resultSortDir==='asc' ? cmp : -cmp;
+  });
+  document.querySelectorAll('#page-result th.sortable').forEach(th=>th.classList.remove('sort-active'));
+  const activeTh=[...document.querySelectorAll('#page-result th.sortable')].find(th=>th.getAttribute('ondblclick')?.includes(`'${resultSortCol}'`));
+  if(activeTh) activeTh.classList.add('sort-active');
+
   const pending = rows.filter(r=>!r.result).length;
   const badge=$('result-pending-badge');
   if(badge){badge.textContent=pending>0?pending+'건 미입력':'';badge.style.display=pending>0?'inline':'none';}
@@ -1960,7 +2041,7 @@ function renderResult() {
     : rows.map((r,i)=>{
         const resCls=r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
         const tc=r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정';
-        const setBadge=r.setId?`<span class="set-badge" style="font-size:8px;width:16px;height:16px">S</span> `:'';
+        const setBadge=r.setId?`<span class="set-badge" style="font-size:8px;width:16px;height:16px" title="SET 심사(기장+부기장 동반)">S</span> `:'';
         return `<tr style="cursor:default">
           <td>${i+1}</td>
           <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
@@ -1978,7 +2059,11 @@ function renderResult() {
               <option value="불합격" ${r.result==='불합격'?'selected':''}>불합격</option>
             </select>
           </td>
-          <td></td>
+          <td>
+            <input class="filter-input" value="${(r.note||'').replace(/"/g,'&quot;')}" placeholder="${r.result==='불합격'?'불합격 사유 입력':'비고'}"
+              style="width:120px;font-size:11px;${r.result==='불합격'&&!r.note?'border-color:var(--fail)':''}"
+              onchange="updateResultNote(${r.id},this.value)">
+          </td>
         </tr>`;
       }).join('');
 }
@@ -2456,6 +2541,15 @@ function updateSubtypeOptions() {
     procSel.innerHTML = '<option value="">선택</option>' +
       cfg.procs.map(p=>`<option value="${p}">${p}</option>`).join('');
   }
+
+  // 인정 심사는 지식/기량 심사일자가 다를 수 있어 날짜를 분리 입력
+  const isInjung = type === '인정';
+  const singleWrap = $('fm-date-single-wrap');
+  const knowWrap = $('fm-date-know-wrap');
+  const skillWrap = $('fm-date-skill-wrap');
+  if (singleWrap) singleWrap.style.display = isInjung ? 'none' : '';
+  if (knowWrap)   knowWrap.style.display   = isInjung ? '' : 'none';
+  if (skillWrap)  skillWrap.style.display  = isInjung ? '' : 'none';
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2542,31 +2636,43 @@ function showCalGroupPopup(event, ids) {
   const e=rows[0];
   const slCls=e.simline==='SIM'?'tag-sim':'tag-line';
 
+  // 카드 얼굴에 이미 보이는 정보(구분, 기종, 편명, 심사관 약칭)는 빼고,
+  // 팝업에서만 확인 가능한 정보(장소, 사번, 결과, 비고) 위주로 표시. 미입력 항목은 그냥 생략.
   const personRows=rows.map(r=>{
     const q=r.qual==='기장'?'C':r.qual==='부기장'?'F':r.qual||'';
     const resCls=r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:10.5px;font-weight:700;min-width:50px">${r.name}</span>
-      <span style="font-size:9px;color:var(--muted)">${q}</span>
-      ${r.result?`<span class="badge-tag ${resCls}" style="font-size:9px;padding:1px 5px">${r.result}</span>`:''}
+    const resIcon=r.result==='합격'?'ti-circle-check':'ti-circle-x';
+    const resBadge = r.result ? `<span class="badge-tag ${resCls}" style="font-size:9px;padding:1px 6px;margin-left:auto;display:inline-flex;align-items:center;gap:2px"><i class="ti ${resIcon}" style="font-size:10px"></i>${r.result}</span>` : '';
+    const empidTag = r.empid ? `<span style="font-size:9.5px;color:var(--muted)">${r.empid}</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:11px;font-weight:700;min-width:56px">${r.name}<span style="font-size:9px;color:var(--muted);font-weight:600;margin-left:3px">${q}</span></span>
+      ${empidTag}
+      ${resBadge}
     </div>`;
   }).join('');
 
+  const placeRow = (e.place && e.place!=='—')
+    ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);margin:6px 0 8px">
+         <i class="ti ti-map-pin" style="font-size:13px;color:var(--muted)"></i>${e.place}
+       </div>` : '';
+  const noteBlock = (e.note && e.note!=='—')
+    ? `<div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;display:flex;gap:6px">
+         <i class="ti ti-note" style="font-size:13px;color:var(--muted);flex-shrink:0;margin-top:1px"></i>
+         <span style="font-size:11px;color:var(--text);line-height:1.4">${e.note}</span>
+       </div>` : '';
+
   const pop=document.createElement('div');
   pop.className='cal-popup';
-  pop.style.width='220px';
+  pop.style.width='240px';
   pop.innerHTML=`
     <div class="cal-popup-title">
       <span><span class="badge-tag ${slCls}" style="margin-right:4px">${e.simline}</span>${e.type}${e.subtype?' · '+e.subtype:''}</span>
       <button style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px" onclick="this.closest('.cal-popup').remove()">✕</button>
     </div>
-    <div class="cal-popup-row"><span class="cal-popup-key">기종</span><span class="cal-popup-val">${e.ac}</span></div>
-    <div class="cal-popup-row"><span class="cal-popup-key">심사일</span><span class="cal-popup-val">${e.date}</span></div>
-    ${e.simline==='LINE'&&e.flight&&e.flight!=='—'?`<div class="cal-popup-row"><span class="cal-popup-key">편명</span><span class="cal-popup-val">${e.flight}</span></div>`:''}
-    <div class="cal-popup-row"><span class="cal-popup-key">심사관</span><span class="cal-popup-val" style="font-weight:700">${e.examiner}</span></div>
-    <div class="cal-popup-row"><span class="cal-popup-key">장소</span><span class="cal-popup-val">${e.place}</span></div>
-    <div style="margin-top:6px;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.5px;margin-bottom:4px">피심사자 (${rows.length}명)</div>
-    ${personRows}`;
+    ${placeRow}
+    <div style="font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.5px;margin-bottom:2px">피심사자 (${rows.length}명)</div>
+    ${personRows}
+    ${noteBlock}`;
   const cell=event.currentTarget.closest('.cal-cell');
   cell.appendChild(pop);
   const rect=pop.getBoundingClientRect();
@@ -2735,6 +2841,10 @@ openPlanModal = function() {
   const box=document.getElementById('plan-modal-box');
   box.style.left='50%'; box.style.top='80px'; box.style.transform='translateX(-50%)';
   addMode='single'; setAddMode('single');
+  if($('fm-edit-id')) $('fm-edit-id').value='';
+  if($('fm-edit-setid')) $('fm-edit-setid').value='';
+  const icon=$('plan-modal-icon'); if(icon) icon.className='ti ti-plus';
+  const title=$('plan-modal-title-text'); if(title) title.textContent='심사계획 추가';
   _openPlanModalBase();
 };
 
@@ -2750,31 +2860,159 @@ function setAddMode(mode) {
   if(seta) seta.style.display = mode==='set'?'':'none';
 }
 
-// ── savePlanRow 재정의 - SET 지원 ──
+// ── savePlanRow 재정의 - SET 지원 + 수정모드 + 인정 지식/기량 분리일자 ──
 const _savePlanBase2 = savePlanRow;
 savePlanRow = function() {
   const g = id => $(id)?.value.trim()||'';
+  const type = g('fm-type');
+  const isInjung = type === '인정';
+  let date, dateKnow='', dateSkill='';
+  if (isInjung) {
+    dateKnow = g('fm-date-know'); dateSkill = g('fm-date-skill');
+    if (!dateKnow && !dateSkill) { alert('인정 심사는 지식심사일정 또는 기량심사일정 중 하나 이상 입력해야 합니다.'); return; }
+    date = dateSkill || dateKnow; // 정렬/필터 기준일: 기량일 우선, 없으면 지식일
+  } else {
+    date = g('fm-date');
+  }
+  const process = g('fm-process');
   const common = {
-    simline:g('fm-simline'),ac:g('fm-ac'),type:g('fm-type'),subtype:g('fm-subtype'),
-    date:g('fm-date'),flight:g('fm-flight')||'—',examiner:g('fm-examiner')||'—',
-    place:g('fm-place')||'—',note:g('fm-note'),result:''
+    simline:g('fm-simline'),ac:g('fm-ac'),type,subtype:g('fm-subtype'),process,
+    date, dateKnow: isInjung?dateKnow:'', dateSkill: isInjung?dateSkill:'',
+    flight:g('fm-flight')||'—',examiner:g('fm-examiner')||'—',
+    place:g('fm-place')||'—',note:g('fm-note')
   };
-  if(!common.simline||!common.ac||!common.type||!common.date){alert('SIM/LINE, 기종, 심사종류, 심사일정은 필수입니다.');return;}
-  if(addMode==='set'){
+  if(!common.simline||!common.ac||!common.type||!date){alert('SIM/LINE, 기종, 심사종류, 심사일정은 필수입니다.');return;}
+
+  const editId = g('fm-edit-id');
+  const editSetId = g('fm-edit-setid');
+
+  if (editId) {
+    // ── 수정 모드 ──
+    if (editSetId) {
+      const pair = DB.filter(r=>r.setId===editSetId);
+      const nameC=g('fm-name-c'),empidC=g('fm-empid-c');
+      const nameF=g('fm-name-f'),empidF=g('fm-empid-f');
+      if(!nameC||!nameF){alert('SET 심사: 기장과 부기장 이름을 모두 입력하세요.');return;}
+      pair.forEach(r=>{
+        Object.assign(r, common);
+        if(r.qual==='기장'){ r.name=nameC; r.empid=empidC; }
+        else { r.name=nameF; r.empid=empidF; }
+      });
+    } else {
+      const row = DB.find(r=>r.id===Number(editId));
+      if(!row){alert('수정할 심사를 찾을 수 없습니다.');return;}
+      const qual=g('fm-qual'),empid=g('fm-empid'),name=g('fm-name');
+      if(!name){alert('이름은 필수입니다.');return;}
+      Object.assign(row, common, {qual,empid,name});
+    }
+  } else if(addMode==='set'){
     const nameC=g('fm-name-c'),empidC=g('fm-empid-c');
     const nameF=g('fm-name-f'),empidF=g('fm-empid-f');
     if(!nameC||!nameF){alert('SET 심사: 기장과 부기장 이름을 모두 입력하세요.');return;}
     const setId='S'+nextId;
-    DB.push({...common,id:nextId++,qual:'기장',  name:nameC,empid:empidC,setId});
-    DB.push({...common,id:nextId++,qual:'부기장',name:nameF,empid:empidF,setId});
+    DB.push({...common,id:nextId++,qual:'기장',  name:nameC,empid:empidC,setId,result:''});
+    DB.push({...common,id:nextId++,qual:'부기장',name:nameF,empid:empidF,setId,result:''});
   } else {
     const qual=g('fm-qual'),empid=g('fm-empid'),name=g('fm-name');
     if(!name){alert('이름은 필수입니다.');return;}
-    DB.push({...common,id:nextId++,qual,empid,name,setId:null});
+    DB.push({...common,id:nextId++,qual,empid,name,setId:null,result:''});
   }
   closePlanModal(); renderPlan();
   saveToStorage();
 };
+
+// ── 심사계획 수정 시작 ──
+function editPlanRow(id) {
+  const row = DB.find(r=>r.id===id); if(!row) return;
+  const box=document.getElementById('plan-modal-box');
+  box.style.left='50%'; box.style.top='80px'; box.style.transform='translateX(-50%)';
+  $('fm-simline').value = row.simline||'';
+  $('fm-ac').value = row.ac||'';
+  $('fm-type').value = row.type||'';
+  updateSubtypeOptions();
+  $('fm-subtype').value = row.subtype||'';
+  $('fm-process').value = row.process||'';
+  if (row.type==='인정') {
+    $('fm-date-know').value = row.dateKnow||'';
+    $('fm-date-skill').value = row.dateSkill||row.date||'';
+  } else {
+    $('fm-date').value = row.date||'';
+  }
+  $('fm-flight').value = (row.flight&&row.flight!=='—')?row.flight:'';
+  $('fm-examiner').value = (row.examiner&&row.examiner!=='—')?row.examiner:'';
+  $('fm-place').value = (row.place&&row.place!=='—')?row.place:'';
+  $('fm-note').value = row.note||'';
+  updateExaminerDatalistByContext();
+
+  $('fm-edit-id').value = String(id);
+  if (row.setId) {
+    $('fm-edit-setid').value = row.setId;
+    setAddMode('set');
+    const pair = DB.filter(r=>r.setId===row.setId);
+    const cap = pair.find(r=>r.qual==='기장'), fo = pair.find(r=>r.qual==='부기장');
+    $('fm-empid-c').value = cap?.empid||''; $('fm-name-c').value = cap?.name||'';
+    $('fm-empid-f').value = fo?.empid||'';  $('fm-name-f').value = fo?.name||'';
+  } else {
+    $('fm-edit-setid').value = '';
+    setAddMode('single');
+    $('fm-qual').value = row.qual||'';
+    $('fm-empid').value = row.empid||'';
+    $('fm-name').value = row.name||'';
+  }
+  $('plan-modal-icon').className = 'ti ti-edit';
+  $('plan-modal-title-text').textContent = '심사계획 수정';
+  $('plan-modal').classList.add('open');
+}
+
+// ── 심사계획 모달: 이 달 적격월 대상자 확인 ──
+function togglePlanModalEligible() {
+  const panel = $('plan-modal-eligible-panel');
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  if (open) { panel.style.display='none'; return; }
+  renderPlanModalEligibleList();
+  panel.style.display = 'block';
+}
+function renderPlanModalEligibleList() {
+  const panel = $('plan-modal-eligible-panel');
+  if (!panel || typeof qualmDB==='undefined') return;
+  const acFilter = $('fm-ac')?.value || '';
+  const slFilter = $('fm-simline')?.value || '';
+  const crewEmpidSet = new Set((typeof crewDB!=='undefined'?crewDB:[]).map(c=>c.empid).filter(Boolean));
+  const list = qualmDB.filter(q=>{
+    if (!q.qualmYm) return false;
+    if (acFilter && acFilter!=='전체' && q.ac!==acFilter) return false;
+    if (slFilter && slFilter!=='전체' && (q.simline||'LINE')!==slFilter) return false;
+    if (crewDB.length>0 && q.empid && !crewEmpidSet.has(q.empid)) return false; // 퇴사자 제외
+    return isMonthDueForRow(planMonth, parseInt(q.qualmYm.split('-')[1]), q.simline||'LINE');
+  });
+  if (!list.length) {
+    panel.innerHTML = `<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px">${planMonth}월 적격월 대상자가 없습니다${acFilter&&acFilter!=='전체'?` (${acFilter})`:''}</div>`;
+    return;
+  }
+  panel.innerHTML = `<div style="font-size:10px;color:var(--muted);margin-bottom:6px">${planMonth}월 적격월 대상 ${list.length}명 · 클릭하면 아래 피심사자 칸에 자동 입력돼요</div>` +
+    list.map(q=>`<div onclick="pickEligiblePerson('${q.empid}','${(q.name||'').replace(/'/g,"\\'")}','${q.role||''}')"
+        style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;font-size:11px"
+        onmouseover="this.style.background='#fff'" onmouseout="this.style.background='transparent'">
+      <span class="ac-dot dot-${q.ac==='A330'?'a330':q.ac==='B737'?'b737':'b777'}"></span>
+      <span style="font-weight:700;min-width:44px">${q.name}</span>
+      <span style="color:var(--muted);min-width:70px">${q.empid}</span>
+      <span style="color:var(--muted)">${q.role||''}</span>
+      <span style="margin-left:auto;color:var(--muted);font-size:10px">${q.qualmYm}${q.qualmYm2?' / '+q.qualmYm2:''}</span>
+    </div>`).join('');
+}
+function pickEligiblePerson(empid, name, role) {
+  if (addMode==='set') {
+    if (role==='기장' || (!$('fm-name-c').value && role!=='부기장')) {
+      $('fm-empid-c').value = empid; $('fm-name-c').value = name;
+    } else {
+      $('fm-empid-f').value = empid; $('fm-name-f').value = name;
+    }
+  } else {
+    $('fm-empid').value = empid; $('fm-name').value = name;
+    if (['기장','부기장','위촉심사관','교관'].includes(role)) $('fm-qual').value = role;
+  }
+}
 
 // ── renderPlan 재정의 - SET 그룹핑 + 심사관 표시 + 클릭 상세 ──
 renderPlan = function() {
@@ -3557,35 +3795,95 @@ function deletePlanRow(id) {
 // renderPlan 삭제 버튼 포함 재정의
 const _renderPlanBase = renderPlan;
 let planSelectedIds = new Set();
+let planSortCol = 'date', planSortDir = 'asc';
+function togglePlanSort(col) {
+  if (planSortCol === col) planSortDir = planSortDir==='asc' ? 'desc' : 'asc';
+  else { planSortCol = col; planSortDir = 'asc'; }
+  renderPlan();
+}
 renderPlan = function() {
   const ac = $('plan-ac')?.value||'전체';
   const sl = $('plan-simline')?.value||'전체';
+  const type = $('plan-type')?.value||'전체';
+  const qual = $('plan-qual')?.value||'전체';
+  const kwEmpid = ($('plan-search-empid')?.value||'').trim().toLowerCase();
+  const kwName = ($('plan-search-name')?.value||'').trim().toLowerCase();
+  const kwExaminer = ($('plan-search-examiner')?.value||'').trim().toLowerCase();
   const ym = `${planYear}-${String(planMonth).padStart(2,'0')}`;
   // Month 표시 동기화 (작은 버튼 + 큰 헤더 표시)
   const smallLbl=$('plan-month-label'); if(smallLbl) smallLbl.textContent=`${planYear}년 ${planMonth}월`;
   const bigLbl=$('plan-month-big'); if(bigLbl) bigLbl.textContent=`${planYear}년 ${planMonth}월`;
-  const rows = DB.filter(r=>
-    (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) && r.date.startsWith(ym)
+
+  // 자격 필터 옵션을 실제 DB 값으로 채움
+  const qualSel = $('plan-qual');
+  if (qualSel && qualSel.dataset.filled!=='1') {
+    const quals=[...new Set(DB.map(r=>r.qual).filter(Boolean))].sort();
+    qualSel.innerHTML='<option value="전체">전체</option>'+quals.map(q=>`<option>${q}</option>`).join('');
+    qualSel.dataset.filled='1';
+  }
+
+  let rows = DB.filter(r=>
+    (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) &&
+    (type==='전체'||r.type===type) && (qual==='전체'||r.qual===qual) &&
+    (!kwEmpid||(r.empid||'').toLowerCase().includes(kwEmpid)) &&
+    (!kwName||(r.name||'').toLowerCase().includes(kwName)) &&
+    (!kwExaminer||(r.examiner||'').toLowerCase().includes(kwExaminer)) &&
+    r.date.startsWith(ym)
   );
+
+  // 정렬 (기본: 심사일정 오름차순, 헤더 더블클릭으로 컬럼별 오름/내림차순 전환)
+  rows = [...rows].sort((a,b)=>{
+    const va=(a[planSortCol]??'').toString(), vb=(b[planSortCol]??'').toString();
+    const cmp = va.localeCompare(vb, 'ko');
+    return planSortDir==='asc' ? cmp : -cmp;
+  });
+  document.querySelectorAll('#page-plan th.sortable').forEach(th=>th.classList.remove('sort-active'));
+  const activeTh=[...document.querySelectorAll('#page-plan th.sortable')].find(th=>th.getAttribute('ondblclick')?.includes(`'${planSortCol}'`));
+  if(activeTh) activeTh.classList.add('sort-active');
+
+  // 자격별 인원 요약
+  const qualCounts = {};
+  rows.forEach(r=>{ qualCounts[r.qual||'미지정'] = (qualCounts[r.qual||'미지정']||0)+1; });
+  const summaryEl = $('plan-qual-summary');
+  if (summaryEl) {
+    summaryEl.innerHTML = Object.keys(qualCounts).length===0 ? '' :
+      Object.entries(qualCounts).map(([q,c])=>
+        `<span class="badge-num" style="background:#F0EDF8;color:#5A4080;border-color:#D8CEEC">${q} ${c}명</span>`
+      ).join('') + `<span class="badge-num" style="background:#EEF2F8;color:var(--line);border-color:#C8D5E4">전체 ${rows.length}건</span>`;
+  }
+
   // 화면에서 사라진 행의 선택 상태는 정리
   const visibleIds = new Set(rows.map(r=>r.id));
   [...planSelectedIds].forEach(id=>{ if(!visibleIds.has(id)) planSelectedIds.delete(id); });
   const tbody = $('plan-tbody');
   tbody.innerHTML = rows.length===0
-    ? `<tr><td colspan="15" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
-    : rows.map((r,i)=>`<tr>
+    ? `<tr><td colspan="17" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
+    : rows.map((r,i)=>{
+        const processDisp = r.type==='인정'
+          ? (r.dateKnow&&r.dateSkill ? `지식+기량<br><span style="font-size:9px;color:var(--muted)">지식 ${r.dateKnow}<br>기량 ${r.dateSkill}</span>`
+             : r.dateSkill ? `기량<br><span style="font-size:9px;color:var(--muted)">${r.dateSkill}</span>`
+             : `지식<br><span style="font-size:9px;color:var(--muted)">${r.dateKnow}</span>`)
+          : (r.process || '—');
+        return `<tr>
         <td class="center"><input type="checkbox" class="plan-row-check" data-id="${r.id}" ${planSelectedIds.has(r.id)?'checked':''} onchange="togglePlanRowSelect(${r.id},this.checked)"></td>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td><span class="badge-tag ${r.type==='정기'?'tag-정기':'tag-인정'}">${r.type}</span></td>
-        <td>${r.subtype}</td><td>${acDot(r.ac)}</td><td>${r.qual}</td>
+        <td>${r.subtype}</td>
+        <td style="font-size:10px;line-height:1.4">${processDisp}</td>
+        <td>${acDot(r.ac)}</td><td>${r.qual}</td>
         <td>${r.empid}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight}</td>
         <td>${r.examiner}</td><td>${r.place}</td><td>${r.note||'—'}</td>
+        <td class="center">
+          <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 8px"
+            onclick="editPlanRow(${r.id})"><i class="ti ti-edit" style="font-size:12px"></i></button>
+        </td>
         <td class="center">
           <button class="btn btn-sm" style="background:#FEF0EE;color:var(--fail);border:1px solid #EDD0CC;padding:2px 8px"
             onclick="deletePlanRow(${r.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
         </td>
-      </tr>`).join('');
+      </tr>`;
+      }).join('');
   const selAll=$('plan-select-all'); if(selAll) selAll.checked = rows.length>0 && rows.every(r=>planSelectedIds.has(r.id));
 };
 
@@ -3865,21 +4163,24 @@ calcAndDrawStat = function(ac) {
   $('badge-result').textContent = pending;
   $('badge-result').style.display = pending>0 ? 'inline' : 'none';
 
+  // 아래 4개 차트는 "심사계획"(예정 포함 전체)이 아니라 "심사결과"(결과가 입력된 완료 심사)만 반영
+  const resultRows = rows.filter(r=>r.result);
+
   // 구분별 운항자격심사 현황: qual(자격) × simline
   const qualGroups = ['기장','부기장','위촉심사관','교관','비행교관','SIM교관'];
-  const activeQuals = qualGroups.filter(q=>rows.some(r=>r.qual===q));
-  const lineData = activeQuals.map(q=>rows.filter(r=>r.qual===q&&r.simline==='LINE').length);
-  const simData  = activeQuals.map(q=>rows.filter(r=>r.qual===q&&r.simline==='SIM').length);
+  const activeQuals = qualGroups.filter(q=>resultRows.some(r=>r.qual===q));
+  const lineData = activeQuals.map(q=>resultRows.filter(r=>r.qual===q&&r.simline==='LINE').length);
+  const simData  = activeQuals.map(q=>resultRows.filter(r=>r.qual===q&&r.simline==='SIM').length);
 
-  const lineTotal = rows.filter(r=>r.simline==='LINE').length;
-  const simTotal  = rows.filter(r=>r.simline==='SIM').length;
+  const lineTotal = resultRows.filter(r=>r.simline==='LINE').length;
+  const simTotal  = resultRows.filter(r=>r.simline==='SIM').length;
   const months = getMonthsInRange(range);
-  const passMonthly = months.map(m=>rows.filter(r=>r.date.startsWith(m)&&r.result==='합격').length);
-  const failMonthly = months.map(m=>rows.filter(r=>r.date.startsWith(m)&&r.result==='불합격').length);
+  const passMonthly = months.map(m=>resultRows.filter(r=>r.date.startsWith(m)&&r.result==='합격').length);
+  const failMonthly = months.map(m=>resultRows.filter(r=>r.date.startsWith(m)&&r.result==='불합격').length);
   const monthLabels = months.map(m=>m.split('-')[1]+'월');
-  const jeongi = rows.filter(r=>r.type==='정기').length;
-  const injung = rows.filter(r=>r.type==='인정').length;
-  const gita   = rows.filter(r=>r.type!=='정기'&&r.type!=='인정').length;
+  const jeongi = resultRows.filter(r=>r.type==='정기').length;
+  const injung = resultRows.filter(r=>r.type==='인정').length;
+  const gita   = resultRows.filter(r=>r.type!=='정기'&&r.type!=='인정').length;
 
   updateChart('chart-examiner','bar', activeQuals.length?activeQuals:['없음'],[
     {label:'LINE',data:lineData,backgroundColor:'rgba(91,127,166,.75)',borderRadius:4},
@@ -3903,10 +4204,12 @@ calcAndDrawStat = function(ac) {
 let _lastExaminerDetailRows = [];
 let _lastExaminerDetailName = '';
 function openExaminerDetail(name) {
-  const rows = DB.filter(r=>r.examiner.includes(name));
+  // 통계 페이지에서 선택된 기간(_lastStatRows)이 있으면 그 범위 안에서만 필터링
+  const source = (typeof _lastStatRows!=='undefined'&&_lastStatRows.length>0) ? _lastStatRows : DB;
+  const rows = source.filter(r=>r.examiner.includes(name));
   _lastExaminerDetailRows = rows;
   _lastExaminerDetailName = name;
-  $('examiner-detail-title').textContent = `${name} · 전체 심사 내역 (${rows.length}건)`;
+  $('examiner-detail-title').textContent = `${name} · ${statPeriodKey||''} 심사 내역 (${rows.length}건)`;
   $('examiner-detail-tbody').innerHTML = rows.length===0
     ? `<tr><td colspan="9" class="empty-state">심사 내역 없음</td></tr>`
     : rows.map((r,i)=>`<tr>
@@ -3960,7 +4263,7 @@ renderRecord = function() {
     return acOk && dtOk && kwOk && resOk;
   });
   $('record-tbody').innerHTML = rows.length===0
-    ?`<tr><td colspan="13" class="empty-state">해당 조건의 기록이 없습니다</td></tr>`
+    ?`<tr><td colspan="14" class="empty-state">해당 조건의 기록이 없습니다</td></tr>`
     :rows.map((r,i)=>{
       const resCls = r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
       const resLabel = r.result||'미입력';
@@ -3972,6 +4275,7 @@ renderRecord = function() {
         <td>${r.empid||'—'}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight||'—'}</td>
         <td>${r.examiner||'—'}</td><td>${r.place||'—'}</td>
         <td class="center"><span class="badge-tag ${resCls}">${resLabel}</span></td>
+        <td>${r.note||'—'}</td>
       </tr>`;
     }).join('');
 };
