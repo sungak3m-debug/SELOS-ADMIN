@@ -9,6 +9,26 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script>window.addEventListener("load",()=>{if(typeof ChartDataLabels!=="undefined")Chart.register(ChartDataLabels);});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- ══════ Firebase (클라우드 저장/실시간 동기화) ══════ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ⚠️ 아래 config를 K3M님의 Firebase 프로젝트 콘솔(⚙️ 프로젝트 설정 > 내 앱 > 웹앱) 값으로 교체하세요.
+// 트리니티 PWA랑 같은 프로젝트를 재사용해도 되고, 데이터는 별도 컬렉션(selos_admin_*)에 저장되어 PWA 데이터와 섞이지 않습니다.
+const firebaseConfig = {
+  apiKey: "REPLACE_ME",
+  authDomain: "REPLACE_ME.firebaseapp.com",
+  projectId: "REPLACE_ME",
+  storageBucket: "REPLACE_ME.appspot.com",
+  messagingSenderId: "REPLACE_ME",
+  appId: "REPLACE_ME"
+};
+firebase.initializeApp(firebaseConfig);
+const cloudDB = firebase.firestore();
+const CLOUD_COLLECTION = 'selos_admin_data'; // 문서: db, qualm, crew, examiner
+</script>
 <style>
 :root{
   --rg:#C8927A; --rg2:#D9A898; --sono:#5C5248;
@@ -589,7 +609,7 @@ select{font-family:inherit}
           <table class="tbl">
             <thead><tr>
               <th>No</th><th>기종</th><th>SIM/LINE</th><th>구분</th><th>사번</th><th>이름</th>
-              <th>자격</th><th>최근 심사일</th><th>적격월</th><th>만료예정</th><th>상태</th>
+              <th>최근 심사일</th><th>적격월</th><th>만료일</th>
             </tr></thead>
             <tbody id="qualm-tbody"></tbody>
           </table>
@@ -614,6 +634,7 @@ select{font-family:inherit}
           <div class="filter-actions" style="margin-left:auto">
             <button class="btn btn-primary btn-sm" onclick="applyPlanFilter()"><i class="ti ti-search"></i> 조회</button>
             <button class="btn btn-outline btn-sm" onclick="resetPlanFilter()">초기화</button>
+            <button class="btn btn-outline btn-sm" id="plan-bulk-delete-btn" onclick="deleteSelectedPlanRows()" style="color:var(--fail);border-color:#EDD0CC"><i class="ti ti-trash"></i> 선택삭제</button>
             <button class="btn btn-excel btn-sm" id="plan-excel-btn"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
           </div>
         </div>
@@ -623,6 +644,7 @@ select{font-family:inherit}
           </div>
           <table class="tbl">
             <thead><tr>
+              <th class="center"><input type="checkbox" id="plan-select-all" onchange="togglePlanSelectAll(this)"></th>
               <th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>기종</th>
               <th>자격</th><th>사번</th><th>이름</th><th>심사일정</th><th>편명/구간</th>
               <th>심사관</th><th>심사장소</th><th>비고</th><th class="center">삭제</th>
@@ -639,10 +661,11 @@ select{font-family:inherit}
             <select class="filter-select" id="cal-ac" onchange="renderCal()"></select>
           </div>
           <div class="filter-actions" style="margin-left:auto">
+            <button class="btn btn-outline btn-sm" onclick="exportCalPDF()"><i class="ti ti-file-type-pdf"></i> PDF 다운</button>
             <button class="btn btn-excel btn-sm" onclick="exportCalExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀 다운</button>
           </div>
         </div>
-        <div class="cal-wrap">
+        <div class="cal-wrap" id="cal-wrap-capture">
           <div class="cal-nav">
             <button class="cal-nav-btn" onclick="calPrev()">‹</button>
             <span class="cal-nav-title" id="cal-title">2026년 5월</span>
@@ -688,6 +711,7 @@ select{font-family:inherit}
             </select>
           </div>
           <div class="filter-actions" style="margin-left:auto">
+            <button class="btn btn-primary btn-sm" onclick="renderResult()"><i class="ti ti-search"></i> 검색</button>
             <button class="btn btn-outline btn-sm" onclick="resetResult()">초기화</button>
             <button class="btn btn-primary btn-sm" style="background:#5A7A9A" onclick="saveResults()"><i class="ti ti-device-floppy"></i> 저장</button>
             <button class="btn btn-excel btn-sm" onclick="exportResultExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
@@ -774,14 +798,14 @@ select{font-family:inherit}
           onclick="document.getElementById('crew-file-input').click()"
           ondragover="event.preventDefault();this.classList.add('drag')"
           ondragleave="this.classList.remove('drag')"
-          ondrop="event.preventDefault();this.classList.remove('drag');processCrewFile(event.dataTransfer.files[0])">
+          ondrop="event.preventDefault();this.classList.remove('drag');processCrewFiles(event.dataTransfer.files)">
           <i class="ti ti-users" style="font-size:20px;display:block;margin-bottom:4px"></i>
-          <div style="font-weight:700;font-size:11px">운항승무원 현황 엑셀 업로드</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:2px">필수 컬럼: 사번, 성명 (기종, 자격, 소속 등 선택)</div>
+          <div style="font-weight:700;font-size:11px">운항승무원 현황 엑셀 업로드 (기종별 파일 여러 개 한번에 선택 가능)</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">"인원현황조회-기종" 형식(사번/이름/직급/기종전환/구분) 또는 사번/성명/기종/자격/소속/비고 형식 모두 지원</div>
           <div style="font-size:10px;color:var(--muted);margin-top:1px">업로드 후 심사계획 추가 시 이름 입력하면 사번 자동완성됩니다</div>
         </div>
-        <input type="file" id="crew-file-input" accept=".xlsx,.csv" style="display:none"
-          onchange="processCrewFile(this.files[0]);this.value=''">
+        <input type="file" id="crew-file-input" accept=".xlsx,.xls,.csv" multiple style="display:none"
+          onchange="processCrewFiles(this.files);this.value=''">
         <div id="crew-upload-status" style="font-size:11px;color:var(--green);margin-bottom:8px;display:none"></div>
         <div class="filter-bar">
           <div class="filter-item">
@@ -866,6 +890,8 @@ select{font-family:inherit}
       </table>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-excel btn-sm" onclick="exportFailDrawerExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
+      <button class="btn btn-outline btn-sm" onclick="exportFailDrawerPDF()"><i class="ti ti-file-type-pdf"></i> PDF</button>
       <button class="btn btn-outline" onclick="closeDrawer('fail')">닫기</button>
     </div>
   </div>
@@ -905,6 +931,8 @@ select{font-family:inherit}
       </table>
     </div>
     <div class="modal-footer">
+      <button class="btn btn-excel btn-sm" onclick="exportExaminerDetailExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
+      <button class="btn btn-outline btn-sm" onclick="exportExaminerDetailPDF()"><i class="ti ti-file-type-pdf"></i> PDF</button>
       <button class="btn btn-outline" onclick="$('examiner-detail-modal').classList.remove('open')">닫기</button>
     </div>
   </div>
@@ -1292,7 +1320,7 @@ function nav(page) {
   const sec = $('page-'+page); if(sec) sec.classList.add('active');
   $('top-title').textContent = PAGE_TITLES[page]?.[0]||'';
 
-  // 통계 페이지일 때만 CSV 버튼 추가
+  // 통계 페이지일 때만 CSV/PDF 버튼 추가
   const actions = $('topbar-actions');
   if (page==='stat') {
     if (!$('stat-csv-btn')) {
@@ -1303,10 +1331,21 @@ function nav(page) {
       csvBtn.onclick = exportStatCSV;
       actions.appendChild(csvBtn);
     }
+    if (!$('stat-pdf-btn')) {
+      const pdfBtn = document.createElement('button');
+      pdfBtn.id='stat-pdf-btn';
+      pdfBtn.className='btn btn-outline btn-sm';
+      pdfBtn.innerHTML='<i class="ti ti-file-type-pdf"></i> PDF';
+      pdfBtn.onclick = exportStatPDF;
+      actions.appendChild(pdfBtn);
+    }
     $('stat-csv-btn').style.display='';
+    $('stat-pdf-btn').style.display='';
   } else {
     const csvBtn=$('stat-csv-btn');
     if(csvBtn) csvBtn.style.display='none';
+    const pdfBtn=$('stat-pdf-btn');
+    if(pdfBtn) pdfBtn.style.display='none';
   }
 
   if (page==='stat')     renderStat();
@@ -1584,6 +1623,10 @@ function exportStatCSV() {
     rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,r.place,r.result||'미입력']),
     `통계_데이터_${statPeriodKey}_${ac}.csv`);
 }
+async function exportStatPDF() {
+  const ac=$('stat-ac')?.value||'전체';
+  await exportElementAsPDF('page-stat', `통계_${statPeriodKey||''}_${ac}`, event, {orientation:'portrait'});
+}
 
 // ══════════════════════════════════════════════════════════════════
 // ⑦ 적격월 관리
@@ -1610,11 +1653,62 @@ function resetQualm() {
   if($('qualm-role')) $('qualm-role').value='전체';
   renderQualm();
 }
+
+// ── 심사기록부(DB) 데이터를 기준으로 적격월(qualmDB) 자동 산출 ──
+// 그룹 기준: 사번 + 기종 + 구분(role: 기장/부기장/위촉심사관 등)
+// - 적격월(qualmYm)   = 해당 그룹에서 최초로 LINE/SIM 심사가 이뤄진 날짜 (YYYY-MM-DD, 기준일 · 한번 정해지면 더 이른 날짜만 갱신)
+// - 최근 심사일(lastDate) = 해당 그룹에서 "정기" 심사만 골라 가장 최근 날짜 (정기심사 기록이 없으면 전체 중 최근 날짜로 대체)
+// - 만료일(expDate)   = 최근 심사일(정기) 기준 1년 후 날짜
+function addOneYear(dateStr) {
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dt = new Date(y+1, m-1, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+function computeQualmFromDB() {
+  const groups = {};
+  DB.forEach(r=>{
+    if(!r.name || !r.date) return;
+    const role = r.qual || '—';
+    const key = `${r.empid||'—'}|${r.ac}|${role}`;
+    if(!groups[key]) groups[key] = {ac:r.ac, role, empid:r.empid||'—', name:r.name, simline:r.simline, allDates:[], jeonggiDates:[]};
+    groups[key].allDates.push(r.date);
+    if(r.type==='정기') groups[key].jeonggiDates.push(r.date);
+    groups[key].name = r.name;
+    groups[key].simline = r.simline || groups[key].simline;
+  });
+  Object.values(groups).forEach(g=>{
+    g.allDates.sort();
+    const firstDate = g.allDates[0];
+    let lastDate, expDate;
+    if(g.jeonggiDates.length) {
+      g.jeonggiDates.sort();
+      lastDate = g.jeonggiDates[g.jeonggiDates.length-1];
+      expDate  = addOneYear(lastDate);
+    } else {
+      lastDate = g.allDates[g.allDates.length-1]; // 정기심사 기록이 없으면 최근 심사일로 대체
+      expDate  = '—';
+    }
+    const existing = qualmDB.find(q=>q.ac===g.ac && q.role===g.role && q.empid===g.empid);
+    if(existing) {
+      existing.name = g.name;
+      existing.simline = g.simline;
+      existing.lastDate = lastDate;
+      existing.expDate  = expDate;
+      // 적격월(기준일)은 한번 정해지면 더 이른 날짜가 나올 때만 갱신
+      if(!existing.qualmYm || firstDate < existing.qualmYm) existing.qualmYm = firstDate;
+    } else {
+      qualmDB.push({ac:g.ac, role:g.role, empid:g.empid, name:g.name, simline:g.simline,
+        qualmYm:firstDate, lastDate, expDate});
+    }
+  });
+}
+
+
 function exportQualmExcel() {
   const ac = $('qualm-ac')?.value||'전체';
   const rows = qualmDB.filter(r=>ac==='전체'||r.ac===ac);
-  exportCSV(['No','기종','구분','사번','이름','자격','최근심사일','적격월','만료예정','상태'],
-    rows.map((r,i)=>[i+1,r.ac,r.role,r.empid,r.name,r.qual,r.lastDate,r.qualmYm,r.expDate,r.status]),
+  exportCSV(['No','기종','구분','사번','이름','최근심사일','적격월','만료일'],
+    rows.map((r,i)=>[i+1,r.ac,r.role,r.empid,r.name,r.lastDate,r.qualmYm,r.expDate]),
     `적격월_${ac}.csv`);
 }
 
@@ -1720,6 +1814,7 @@ function savePlanRow() {
   DB.push({id:nextId++,simline,type,subtype,ac,qual:g('fm-qual'),empid,name,date,
     flight:g('fm-flight')||'—',examiner:g('fm-examiner')||'—',place:g('fm-place')||'—',note:g('fm-note'),result:''});
   closePlanModal(); renderPlan();
+  saveToStorage();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1774,8 +1869,9 @@ function updateResult(id, val) {
   const pending=DB.filter(r=>r.result==='').length;
   $('badge-result').textContent=pending;
   $('badge-result').style.display=pending>0?'inline':'none';
+  saveToStorage();
 }
-function saveResults() { alert('저장 완료되었습니다.'); renderResult(); }
+function saveResults() { saveToStorage(); alert('☁️ 클라우드에 저장 완료되었습니다.'); renderResult(); }
 function resetResult() {
   $('result-ac').value=currentUser?.ac||'전체';
   if($('result-simline')) $('result-simline').value='전체';
@@ -1862,10 +1958,10 @@ function renderExaminer() {
         <td style="font-weight:600">${r.name}</td>
         <td>
           <input class="filter-input" value="${r.period||''}" style="width:130px;font-size:11px"
-            onchange="examinerDB[${idx}].period=this.value">
+            onchange="examinerDB[${idx}].period=this.value;saveExaminerToCloud()">
         </td>
         <td>
-          <select class="filter-select" style="font-size:11px" onchange="examinerDB[${idx}].status=this.value;renderExaminer()">
+          <select class="filter-select" style="font-size:11px" onchange="examinerDB[${idx}].status=this.value;renderExaminer();saveExaminerToCloud()">
             <option ${r.status==='활동중'?'selected':''}>활동중</option>
             <option ${r.status==='비활동'?'selected':''}>비활동</option>
             <option ${r.status==='만료'?'selected':''}>만료</option>
@@ -1886,6 +1982,7 @@ function deleteExaminer(idx) {
   if(!confirm('심사관을 삭제하시겠습니까?')) return;
   examinerDB.splice(idx,1);
   renderExaminer();
+  saveExaminerToCloud();
 }
 
 function updateExaminerDatalist() {
@@ -1943,63 +2040,138 @@ renderProfiles();
 
 // ══════════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════
-// localStorage 영속 저장
+// Firestore 클라우드 영속 저장 + 실시간 동기화
+// (여러 담당자가 동시에 접속해도 자동으로 최신 데이터를 공유합니다)
 // ══════════════════════════════════════════════════════════════════
-const STORAGE_KEY_DB    = 'selos_db_v1';
-const STORAGE_KEY_QUALM = 'selos_qualm_v1';
+let _suppressSnapshot = false; // 내가 방금 쓴 내용을 onSnapshot이 즉시 되돌려 재렌더하지 않도록 방지
 
-function saveToStorage() {
+function _setStatus(text, color) {
+  const st=$('upload-status');
+  if(st){ st.style.display='block'; if(color) st.style.color=color; st.textContent=text; }
+}
+
+async function saveToStorage() {
   try {
-    localStorage.setItem(STORAGE_KEY_DB, JSON.stringify(DB));
-    localStorage.setItem(STORAGE_KEY_QUALM, JSON.stringify(qualmDB));
-    // 저장 시각 기록
-    localStorage.setItem('selos_saved_at', new Date().toISOString());
-    // 업로드 상태바 업데이트
+    _suppressSnapshot = true;
+    await cloudDB.collection(CLOUD_COLLECTION).doc('db').set({data: JSON.stringify(DB), savedAt: new Date().toISOString()});
+    await cloudDB.collection(CLOUD_COLLECTION).doc('qualm').set({data: JSON.stringify(qualmDB), savedAt: new Date().toISOString()});
+    const savedAt=new Date().toLocaleString('ko-KR');
     const st=$('upload-status');
-    if(st&&st.style.display!=='none'){
-      const savedAt=new Date().toLocaleString('ko-KR');
-      if(!st.textContent.includes('💾'))
-        st.textContent = st.textContent + ` 💾 ${savedAt} 자동저장됨`;
-    }
+    if(st&&st.style.display!=='none'&&!st.textContent.includes('☁️'))
+      st.textContent = st.textContent + ` ☁️ ${savedAt} 클라우드 저장됨`;
   } catch(e) {
-    console.warn('storage save failed', e);
-    alert('⚠️ 데이터 저장 실패: ' + e.message + '\n\n브라우저 저장공간이 부족할 수 있습니다.');
+    console.warn('cloud save failed', e);
+    alert('⚠️ 클라우드 저장 실패: ' + e.message + '\n\nFirebase 설정(firebaseConfig)을 확인해주세요.');
+  } finally {
+    setTimeout(()=>{_suppressSnapshot = false;}, 800);
   }
 }
 
-function loadFromStorage() {
+async function saveExaminerToCloud() {
   try {
-    const db = localStorage.getItem(STORAGE_KEY_DB);
-    const qm = localStorage.getItem(STORAGE_KEY_QUALM);
-    const savedAt = localStorage.getItem('selos_saved_at');
-    let loaded = false;
-    if (db) {
-      const parsed = JSON.parse(db);
+    _suppressSnapshot = true;
+    await cloudDB.collection(CLOUD_COLLECTION).doc('examiner').set({data: JSON.stringify(examinerDB), savedAt: new Date().toISOString()});
+  } catch(e) {
+    console.warn('cloud save (examiner) failed', e);
+    alert('⚠️ 심사관 데이터 클라우드 저장 실패: ' + e.message);
+  } finally {
+    setTimeout(()=>{_suppressSnapshot = false;}, 800);
+  }
+}
+
+async function saveCrewToCloud() {
+  try {
+    _suppressSnapshot = true;
+    await cloudDB.collection(CLOUD_COLLECTION).doc('crew').set({data: JSON.stringify(crewDB), savedAt: new Date().toISOString()});
+  } catch(e) {
+    console.warn('cloud save (crew) failed', e);
+    alert('⚠️ 운항승무원 데이터 클라우드 저장 실패: ' + e.message);
+  } finally {
+    setTimeout(()=>{_suppressSnapshot = false;}, 800);
+  }
+}
+
+async function loadFromStorage() {
+  try {
+    const dbSnap = await cloudDB.collection(CLOUD_COLLECTION).doc('db').get();
+    const qmSnap = await cloudDB.collection(CLOUD_COLLECTION).doc('qualm').get();
+    let loaded = false, savedAt = null;
+    if (dbSnap.exists) {
+      const parsed = JSON.parse(dbSnap.data().data || '[]');
+      savedAt = dbSnap.data().savedAt;
       if (parsed && parsed.length) {
         DB.splice(0, DB.length, ...parsed);
         nextId = Math.max(...parsed.map(r=>r.id||0)) + 1;
         loaded = true;
       }
     }
-    if (qm) {
-      const parsed = JSON.parse(qm);
+    if (qmSnap.exists) {
+      const parsed = JSON.parse(qmSnap.data().data || '[]');
       if (parsed && parsed.length) qualmDB.splice(0, qualmDB.length, ...parsed);
     }
-    // 로드 성공 시 업로드 상태바에 표시
     if (loaded && savedAt) {
-      const st=$('upload-status');
-      if(st){
-        st.style.display='block';
-        st.style.color='var(--muted)';
-        const dt=new Date(savedAt).toLocaleString('ko-KR');
-        st.textContent=`💾 저장된 데이터 로드: ${DB.length}건 (마지막 저장: ${dt})`;
-      }
+      const dt=new Date(savedAt).toLocaleString('ko-KR');
+      _setStatus(`☁️ 클라우드 데이터 로드: ${DB.length}건 (마지막 저장: ${dt})`, 'var(--muted)');
     }
+    renderRecord();renderPlan();renderResult();renderCal();renderQualm();
+    calcAndDrawStat('전체');
     return loaded;
   } catch(e) {
-    console.warn('storage load failed', e);
+    console.warn('cloud load failed', e);
+    alert('⚠️ 클라우드 데이터 로드 실패: ' + e.message + '\n\nFirebase 설정(firebaseConfig)을 확인해주세요.');
     return false;
   }
+}
+
+async function loadCrewFromCloud() {
+  try {
+    const snap = await cloudDB.collection(CLOUD_COLLECTION).doc('crew').get();
+    if (snap.exists) {
+      const parsed = JSON.parse(snap.data().data || '[]');
+      if (parsed.length) crewDB.splice(0, crewDB.length, ...parsed);
+    }
+    renderCrew(); updateCrewDatalist();
+  } catch(e) { console.warn('cloud load (crew) failed', e); }
+}
+
+async function loadExaminerFromCloud() {
+  try {
+    const snap = await cloudDB.collection(CLOUD_COLLECTION).doc('examiner').get();
+    if (snap.exists) {
+      const parsed = JSON.parse(snap.data().data || '[]');
+      if (parsed.length) examinerDB.splice(0, examinerDB.length, ...parsed);
+    }
+    renderExaminer();
+  } catch(e) { console.warn('cloud load (examiner) failed', e); }
+}
+
+// ── 실시간 동기화: 다른 담당자가 저장하면 자동으로 화면 갱신 ──
+function setupRealtimeSync() {
+  cloudDB.collection(CLOUD_COLLECTION).doc('db').onSnapshot(snap=>{
+    if(_suppressSnapshot || !snap.exists) return;
+    const parsed = JSON.parse(snap.data().data || '[]');
+    DB.splice(0, DB.length, ...parsed);
+    renderRecord();renderPlan();renderResult();renderCal();
+    calcAndDrawStat('전체');
+  });
+  cloudDB.collection(CLOUD_COLLECTION).doc('qualm').onSnapshot(snap=>{
+    if(_suppressSnapshot || !snap.exists) return;
+    const parsed = JSON.parse(snap.data().data || '[]');
+    qualmDB.splice(0, qualmDB.length, ...parsed);
+    renderQualm();
+  });
+  cloudDB.collection(CLOUD_COLLECTION).doc('crew').onSnapshot(snap=>{
+    if(_suppressSnapshot || !snap.exists) return;
+    const parsed = JSON.parse(snap.data().data || '[]');
+    crewDB.splice(0, crewDB.length, ...parsed);
+    renderCrew(); updateCrewDatalist();
+  });
+  cloudDB.collection(CLOUD_COLLECTION).doc('examiner').onSnapshot(snap=>{
+    if(_suppressSnapshot || !snap.exists) return;
+    const parsed = JSON.parse(snap.data().data || '[]');
+    examinerDB.splice(0, examinerDB.length, ...parsed);
+    renderExaminer();
+  });
 }
 
 // 업로드 완료 후 자동 저장 훅 (processExcelFile 자체에 saveToStorage 포함됨)
@@ -2009,8 +2181,12 @@ processQualmFile = async function(file) {
   saveToStorage();
 };
 
-// 앱 시작 시 저장된 데이터 로드
-loadFromStorage();
+// 앱 시작 시 클라우드 데이터 로드 + 실시간 동기화 시작
+loadFromStorage().then(()=>{
+  loadCrewFromCloud();
+  loadExaminerFromCloud();
+  setupRealtimeSync();
+});
 
 // ══════════════════════════════════════════════════════════════════
 // 심사결과 Month 피커 (planYear/planMonth 분리)
@@ -2405,6 +2581,7 @@ savePlanRow = function() {
     DB.push({...common,id:nextId++,qual,empid,name,setId:null});
   }
   closePlanModal(); renderPlan();
+  saveToStorage();
 };
 
 // ── renderPlan 재정의 - SET 그룹핑 + 심사관 표시 + 클릭 상세 ──
@@ -2680,7 +2857,7 @@ processExcelFile = async function(file){
     return;
   }
   DB.splice(0,DB.length,...newDB);
-  ['record-ac','plan-ac','result-ac','cal-ac','stat-ac'].forEach(id=>{const el=$(id);if(el)el.value='전체';});
+  ['record-ac','plan-ac','result-ac','cal-ac','stat-ac'].forEach(id=>{const el=$(id);if(el)el.value=currentUser?.ac||'전체';});
   const st=$('upload-status');
   const noResult=newDB.filter(r=>!r.result).length;
   if(st){
@@ -2688,8 +2865,23 @@ processExcelFile = async function(file){
     st.textContent=`✅ ${imported}건 업로드 완료 — 시트:"${sheetName}"`+
       (noResult>0?` · 결과 미입력 ${noResult}건`:'');
   }
+  // 업로드된 데이터는 여러 달에 걸쳐 있을 수 있으므로,
+  // 심사결과/심사계획/심사달력 모두 업로드 데이터 중 "가장 최근 날짜가 속한 달"로 자동 이동
+  // (Month 필터는 그대로 살아있어서, 이동한 뒤에는 해당 달 데이터만 정상적으로 필터링됨)
+  const latestDate = newDB.map(r=>r.date).filter(Boolean).sort().pop();
+  if(latestDate){
+    const [ly, lm] = latestDate.split('-').map(Number);
+    resultYear = ly; resultMonth = lm;
+    planYear = ly; planMonth = lm;
+    calYear = ly; calMonth = lm;
+    const rl=$('result-month-label'); if(rl) rl.textContent=`${ly}년 ${lm}월`;
+    const pl=$('plan-month-label');   if(pl) pl.textContent=`${ly}년 ${lm}월`;
+    const ct=$('cal-title');          if(ct) ct.textContent=`${ly}년 ${lm}월`;
+  }
+  // 적격월(자격 유지 현황) 자동 반영
+  if(typeof computeQualmFromDB==='function') computeQualmFromDB();
   renderRecord();renderPlan();renderResult();renderCal();renderQualm();
-  calcAndDrawStat('전체');
+  calcAndDrawStat(currentUser?.ac||'전체');
   saveToStorage();
 };
 
@@ -2738,45 +2930,77 @@ async function processQualmFile(file){
 // ══════════════════════════════════════════════════════════════════
 // 운항승무원 현황
 // ══════════════════════════════════════════════════════════════════
-let crewDB = [];
+let crewDB = [{"empid": "T100002", "name": "강기영", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T100035", "name": "김종오", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T130059", "name": "안광명", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T150133", "name": "홍성일", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T160421", "name": "배종훈", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T170412", "name": "길호진", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T180203", "name": "김학훈", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T180449", "name": "홍인수", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T180451", "name": "김연욱", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T190065", "name": "박진영", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T190066", "name": "김동영", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T190089", "name": "장경식", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T190097", "name": "최태혁", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T190101", "name": "김관섭", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T190290", "name": "정희종", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T220062", "name": "정경진", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T220184", "name": "강신원", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T220186", "name": "김진포", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T230102", "name": "조치형", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T230103", "name": "최승혁", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T230307", "name": "이태준", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T240347", "name": "임진원", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T240348", "name": "배기덕", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T240987", "name": "문경목", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T250112", "name": "배현찬", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T250156", "name": "최의수", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T250254", "name": "권중기", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T250317", "name": "김성학", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T260001", "name": "박지호", "ac": "B737", "qual": "기장", "dept": "수석기장/B737", "note": ""}, {"empid": "T110039", "name": "조창호", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": "기종전환대상"}, {"empid": "T110042", "name": "양진모", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T110043", "name": "장세하", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T110086", "name": "이정용", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T120049", "name": "김민성", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T130012", "name": "김초롱", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T130039", "name": "윤민우", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": "기종전환대상"}, {"empid": "T130041", "name": "허강률", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T140049", "name": "김윤오", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T140088", "name": "김준기", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T140136", "name": "지현식", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150066", "name": "서종민", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150067", "name": "박우성", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150068", "name": "박영환", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150117", "name": "김구", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150118", "name": "박성준", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150135", "name": "최종대", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150140", "name": "차혜미", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150182", "name": "마경완", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150195", "name": "김영현", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150274", "name": "이근식", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T150283", "name": "정정욱", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T160080", "name": "이재욱", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T160307", "name": "김동진", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T160308", "name": "김의겸", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T160317", "name": "최명순", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T160397", "name": "고승훈", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T160398", "name": "정덕한", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T160410", "name": "서종범", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": "기종전환대상"}, {"empid": "T170007", "name": "조현일", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T170032", "name": "김형준", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T170040", "name": "송석호", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T170218", "name": "류강원", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180024", "name": "송호석", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180025", "name": "신건우", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180216", "name": "양승필", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180281", "name": "김상복", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180283", "name": "서상원", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180323", "name": "이수준", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180325", "name": "김현배", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": "기종전환대상"}, {"empid": "T180340", "name": "김재용", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180342", "name": "김재진", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180343", "name": "강금석", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180454", "name": "김학현", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180455", "name": "김형우", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T180456", "name": "주윤수", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190047", "name": "김정록", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190048", "name": "진종민", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190067", "name": "김종천", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190070", "name": "윤한신", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190098", "name": "김현오", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190172", "name": "정민철", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190195", "name": "송영민", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190226", "name": "강태규", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190289", "name": "이용구", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190313", "name": "백흠주", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190314", "name": "장운규", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190417", "name": "문신", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190435", "name": "김진헌", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T190438", "name": "정호성", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220063", "name": "박기완", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220064", "name": "박영원", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220065", "name": "황태인", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220066", "name": "김재철", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220067", "name": "안성식", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220068", "name": "김재호", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220069", "name": "배일주", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220070", "name": "이재흥", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220097", "name": "이운희", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220098", "name": "김윤진", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220099", "name": "박주륜", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220100", "name": "심수철", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220101", "name": "장기상", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220102", "name": "김영재", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220103", "name": "임희동", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220104", "name": "김종욱", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220106", "name": "임동균", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220107", "name": "임원재", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T220188", "name": "이용휘", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230107", "name": "석형균", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230110", "name": "김민수", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230111", "name": "강혁", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230113", "name": "손민성", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230310", "name": "홍상준", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230312", "name": "김원진", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230315", "name": "장태식", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230317", "name": "전성일", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230403", "name": "김회성", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230405", "name": "강대웅", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230406", "name": "이근우", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230407", "name": "전대홍", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230410", "name": "서정훈", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T230411", "name": "한낙경", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T240023", "name": "박재석", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T240031", "name": "박세훈", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T240543", "name": "김경태", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T240546", "name": "심우성", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T240765", "name": "김병희", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T240766", "name": "이상기", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T240988", "name": "김동국", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T250136", "name": "강건우", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T250316", "name": "이창열", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T260073", "name": "오민웅", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T260074", "name": "이진승", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T260075", "name": "이근로", "ac": "B737", "qual": "기장", "dept": "선임기장/B737", "note": ""}, {"empid": "T130088", "name": "신선호", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T140139", "name": "조아라", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T150071", "name": "박성현", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T150141", "name": "이현진", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160081", "name": "박준형", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160155", "name": "최종범", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160188", "name": "황승현", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160236", "name": "김재원", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160311", "name": "김주훈", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160315", "name": "홍재화", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160316", "name": "김신형", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160374", "name": "최문정", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160415", "name": "정원", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160419", "name": "홍정원", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160420", "name": "한종표", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170042", "name": "김상욱", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170043", "name": "이건호", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170044", "name": "이경은", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170045", "name": "유상훈", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170046", "name": "백정훈", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170047", "name": "이동현", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170049", "name": "임인호", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170050", "name": "남명식", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170051", "name": "김태준", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170090", "name": "이동규", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170094", "name": "홍성범", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170096", "name": "이장혁", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170098", "name": "박경훈", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170200", "name": "김선태", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170202", "name": "임의섭", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170206", "name": "박순상", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170222", "name": "김용희", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170223", "name": "최태원", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170224", "name": "최순규", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170225", "name": "김향기", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170226", "name": "김준일", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170227", "name": "서창형", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170228", "name": "송철민", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170229", "name": "백승건", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170230", "name": "양준원", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170267", "name": "이예은", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170268", "name": "박장순", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170269", "name": "장관", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170416", "name": "이호영", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170417", "name": "황선두", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170419", "name": "김웅년", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170420", "name": "한상진", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170421", "name": "변승환", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T170423", "name": "안은호", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180004", "name": "도준호", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180006", "name": "김동헌", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180007", "name": "유승수", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180008", "name": "강병주", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180154", "name": "최원형", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180158", "name": "박태양", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180160", "name": "강현욱", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180161", "name": "김현중", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180163", "name": "김대영", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180166", "name": "이창수", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180224", "name": "박영호", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180390", "name": "김봉준", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180391", "name": "현태곤", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T180458", "name": "장우성", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T230409", "name": "김창용", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240027", "name": "이청선", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240030", "name": "조영우", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240033", "name": "윤정준", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240034", "name": "김성완", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240035", "name": "김백만", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240547", "name": "정기만", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240769", "name": "조재형", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240770", "name": "박도준", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240771", "name": "김남교", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T240772", "name": "조수현", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T250109", "name": "김영역", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T250137", "name": "예병국", "ac": "B737", "qual": "기장", "dept": "기장/B737", "note": ""}, {"empid": "T160191", "name": "김진석", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180164", "name": "김민세", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180220", "name": "한상구", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180334", "name": "박지운", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180388", "name": "송하정", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180389", "name": "서형욱", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180394", "name": "김현수", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180395", "name": "강호성", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180396", "name": "이호철", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180397", "name": "김재헌", "ac": "B737", "qual": "기장", "dept": "수습기장/B737", "note": ""}, {"empid": "T180233", "name": "장유연", "ac": "B737", "qual": "기장", "dept": "기장훈련요원/B737", "note": "기종전환대상"}, {"empid": "T180335", "name": "강인혁", "ac": "B737", "qual": "기장", "dept": "기장훈련요원/B737", "note": ""}, {"empid": "T180337", "name": "유순재", "ac": "B737", "qual": "기장", "dept": "기장훈련요원/B737", "note": "기종전환대상"}, {"empid": "T190011", "name": "김현철", "ac": "B737", "qual": "기장", "dept": "기장훈련요원/B737", "note": ""}, {"empid": "T140087", "name": "김정석", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T150180", "name": "우다혜", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T160235", "name": "이준호", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T160314", "name": "정민수", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T160414", "name": "양상천", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T170231", "name": "장윤철", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T170266", "name": "강문충", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T170422", "name": "안형진", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180002", "name": "김준호", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180033", "name": "이한웅", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180156", "name": "임영천", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180157", "name": "김일두", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180159", "name": "이태형", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180162", "name": "최동현", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180218", "name": "주용완", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180222", "name": "이재원", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180328", "name": "배숭규", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180329", "name": "황현철", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180398", "name": "유호선", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T180399", "name": "김학준", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190008", "name": "김성훈", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190009", "name": "김길조", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190010", "name": "천광민", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190015", "name": "이형석", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190017", "name": "안진열", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190075", "name": "송승용", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190076", "name": "하동주", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190077", "name": "이향준", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190078", "name": "임이랑", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190079", "name": "김재준", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190080", "name": "이창현", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190083", "name": "정현섭", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190087", "name": "김성모", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190088", "name": "강상구", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190180", "name": "유비", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190183", "name": "유주상", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190293", "name": "박철홍", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190294", "name": "조창현", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190295", "name": "최승욱", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190297", "name": "윤신우", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190298", "name": "고영균", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190300", "name": "전병호", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190302", "name": "양호열", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190405", "name": "홍대인", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190406", "name": "김성관", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190407", "name": "차선호", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190408", "name": "김현식", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190409", "name": "신지수", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190410", "name": "김영환", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190412", "name": "오민석", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190414", "name": "조건희", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190415", "name": "옥지원", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190444", "name": "전진용", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190445", "name": "도영", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190446", "name": "고태영", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190448", "name": "강창우", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T190450", "name": "김휘", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230054", "name": "유영식", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230055", "name": "최지환", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230056", "name": "이태성", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230057", "name": "김동훈", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230198", "name": "이현철", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230200", "name": "조상현", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230203", "name": "박주현", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230204", "name": "김현일", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230322", "name": "이헌주", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230324", "name": "유준선", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230325", "name": "권근모", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230602", "name": "백경보", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230603", "name": "한성용", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230604", "name": "이상휘", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230605", "name": "고강", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230606", "name": "김재우", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T240355", "name": "송희태", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T240356", "name": "홍성준", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T240357", "name": "천성실", "ac": "B737", "qual": "부기장", "dept": "선임부기장/B737", "note": ""}, {"empid": "T230053", "name": "김유경", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230326", "name": "송평화", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230327", "name": "박지범", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230412", "name": "강지은", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230414", "name": "나윤진", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230416", "name": "홍성균", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230417", "name": "설승현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230418", "name": "임근일", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230419", "name": "방상현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230420", "name": "박충열", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230421", "name": "한종석", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230422", "name": "이하늘", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230432", "name": "성경문", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230433", "name": "임민규", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230434", "name": "조현기", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230436", "name": "제양균", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230438", "name": "변건호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230439", "name": "전세찬", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230440", "name": "김우혁", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230478", "name": "정지훈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230479", "name": "백운용", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230480", "name": "변용현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230481", "name": "황태연", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230482", "name": "민찬우", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230483", "name": "조병기", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230484", "name": "황지훈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230593", "name": "조규빈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230595", "name": "허민구", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230597", "name": "한상민", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230598", "name": "변상현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230628", "name": "나희식", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230629", "name": "박주현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230630", "name": "양지웅", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230631", "name": "홍영표", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230632", "name": "권병민", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230634", "name": "백동환", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230635", "name": "육영은", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T230636", "name": "이민수", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240203", "name": "정진우", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240208", "name": "이상헌", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240209", "name": "한상호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240475", "name": "한재호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240476", "name": "우병탁", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240477", "name": "권도훈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240478", "name": "김도형", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240479", "name": "서명석", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240480", "name": "최수완", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240481", "name": "김동겸", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240482", "name": "임동우", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240483", "name": "김용석", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240485", "name": "양재호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240486", "name": "박정민", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240487", "name": "이진백", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240488", "name": "정지웅", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240489", "name": "조정민", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240490", "name": "박범서", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240588", "name": "임채승", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240589", "name": "허승학", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240590", "name": "권경환", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240591", "name": "오경렬", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240592", "name": "김세준", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240594", "name": "이성백", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240595", "name": "백록담", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240597", "name": "김정욱", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240598", "name": "류종호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240599", "name": "최지상", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240600", "name": "윤남걸", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240601", "name": "이지은", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240837", "name": "손민지", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240838", "name": "김용빈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240839", "name": "김준성", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240840", "name": "유동주", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240841", "name": "정보근", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240842", "name": "김종우", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240843", "name": "하엽재", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240844", "name": "최은진", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240845", "name": "김태훈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240846", "name": "백승돈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240847", "name": "신인호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240848", "name": "이영진", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240849", "name": "장현우", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240850", "name": "이상민", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240957", "name": "이명구", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240958", "name": "이석영", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240959", "name": "이정훈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240960", "name": "나도영", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240961", "name": "정찬영", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240962", "name": "강구현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240963", "name": "오도근", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240964", "name": "박재훈", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240965", "name": "최진현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240966", "name": "구승민", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240967", "name": "이결", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240968", "name": "이현곤", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240969", "name": "박준혁", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240970", "name": "김민준", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240971", "name": "공민기", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T240972", "name": "이현건", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250117", "name": "이호준", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250118", "name": "박주홍", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250119", "name": "윤건우", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250120", "name": "박상현", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250121", "name": "조현재", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250122", "name": "이호재", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250123", "name": "박준형", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250124", "name": "최지명", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250125", "name": "김인규", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250126", "name": "이창용", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250127", "name": "한주석", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250128", "name": "박재우", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250129", "name": "엄상윤", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250130", "name": "강하경", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250131", "name": "김재호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250132", "name": "양영환", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250169", "name": "이관형", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250170", "name": "배지헌", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250171", "name": "안영찬", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250172", "name": "유지호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250173", "name": "이태석", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250174", "name": "임현곤", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250175", "name": "정진호", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250176", "name": "박정민", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250177", "name": "하동아", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250178", "name": "류지원", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250179", "name": "최지용", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250180", "name": "강태완", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250181", "name": "김용진", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250182", "name": "정희진", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T250183", "name": "이창석", "ac": "B737", "qual": "부기장", "dept": "부기장/B737", "note": ""}, {"empid": "T180221", "name": "이진희", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T180393", "name": "어재훈", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260083", "name": "서영재", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260084", "name": "김주완", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260085", "name": "김병훈", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260086", "name": "이윤규", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260087", "name": "김영경", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260088", "name": "서보윤", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260089", "name": "김도형", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260090", "name": "서준석", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260091", "name": "조승현", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260092", "name": "하준수", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260093", "name": "이홍걸", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260094", "name": "정석현", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260204", "name": "김용규", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260205", "name": "정윤환", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260206", "name": "최승재", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260207", "name": "김건주", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260208", "name": "박준서", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260209", "name": "최종희", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260210", "name": "최준영", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260211", "name": "이성열", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260212", "name": "박희재", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260213", "name": "김동규", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260214", "name": "김대현", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260215", "name": "전범준", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260216", "name": "문지호", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260217", "name": "손정민", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260218", "name": "조민택", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T260219", "name": "김지원", "ac": "B737", "qual": "부기장", "dept": "부기장훈련요원/B737", "note": ""}, {"empid": "T180450", "name": "김학경", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": "기종전환대상"}, {"empid": "T190045", "name": "최동열", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": "기종전환대상"}, {"empid": "T190063", "name": "한왕석", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": "기종전환대상"}, {"empid": "T190064", "name": "윤인종", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": "기종전환대상"}, {"empid": "T220036", "name": "정태일", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": ""}, {"empid": "T230308", "name": "김두일", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": "기종전환대상"}, {"empid": "T240349", "name": "문승진", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": "기종전환대상"}, {"empid": "T250155", "name": "최창희", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": ""}, {"empid": "T250305", "name": "조현창", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": ""}, {"empid": "T250306", "name": "김석태", "ac": "A330", "qual": "기장", "dept": "수석기장/A330", "note": ""}, {"empid": "T110078", "name": "임유승", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T110087", "name": "이병주", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T120046", "name": "박용섭", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T120047", "name": "신상훈", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T130005", "name": "김수홍", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T130006", "name": "안성현", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T130011", "name": "임성수", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T130042", "name": "강대준", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T130087", "name": "이재홍", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T130091", "name": "정의준", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T140018", "name": "김민욱", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T140019", "name": "송성근", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T140048", "name": "이재선", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T140135", "name": "노명균", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T150005", "name": "이용일", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T150056", "name": "최원주", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T150204", "name": "박세종", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T150205", "name": "박수호", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T150276", "name": "박일수", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T150282", "name": "이도영", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T160380", "name": "김동욱", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T170037", "name": "조재하", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T170265", "name": "문재홍", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T170413", "name": "조성기", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180014", "name": "김영욱", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180019", "name": "부장윤", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180026", "name": "김석환", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180136", "name": "오성종", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180137", "name": "조지현", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180284", "name": "박건아", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180327", "name": "김누리종", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180341", "name": "홍철의", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180354", "name": "문승규", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180355", "name": "이기철", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180359", "name": "김정민", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T180468", "name": "한현희", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T190004", "name": "김강문", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T190005", "name": "한승우", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T190046", "name": "조중민", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T190049", "name": "이영찬", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T190100", "name": "조재형", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T190312", "name": "곽기훈", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T190416", "name": "박용윤", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T220037", "name": "강태구", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T220038", "name": "장경순", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T220039", "name": "이갑규", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T220105", "name": "양동광", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T220108", "name": "홍순기", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T220189", "name": "최호열", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T220191", "name": "임성훈", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T220192", "name": "박진석", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T230104", "name": "이성호", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T230106", "name": "공용택", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T230108", "name": "김건환", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T230109", "name": "이창훈", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T230313", "name": "오응석", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T230316", "name": "가재도", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T230424", "name": "주석훈", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240025", "name": "서영주", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T240026", "name": "남종희", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T240350", "name": "표성일", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T240351", "name": "노환철", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T240352", "name": "곽동우", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T240354", "name": "권병수", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T240502", "name": "양천흠", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240503", "name": "구광모", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240504", "name": "고민석", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240505", "name": "전홍준", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240580", "name": "안경식", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240581", "name": "조근형", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240582", "name": "강관우", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240583", "name": "송기원", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240767", "name": "박승호", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": "기종전환대상"}, {"empid": "T240835", "name": "김대기", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240836", "name": "손진영", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240937", "name": "김성민", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T240939", "name": "변용식", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T250034", "name": "김성국", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T250111", "name": "왕승균", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T250113", "name": "방은주", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T250330", "name": "임재근", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T260171", "name": "김현진", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T260198", "name": "김재만", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T260228", "name": "조준오", "ac": "A330", "qual": "기장", "dept": "선임기장/A330", "note": ""}, {"empid": "T190003", "name": "김광진", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": "기종전환대상"}, {"empid": "T230112", "name": "신병근", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": "기종전환대상"}, {"empid": "T230318", "name": "김무영", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": "기종전환대상"}, {"empid": "T240032", "name": "최영선", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": "기종전환대상"}, {"empid": "T240353", "name": "염원석", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": "기종전환대상"}, {"empid": "T240773", "name": "송동하", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": "기종전환대상"}, {"empid": "T240906", "name": "송길수", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": ""}, {"empid": "T240940", "name": "서귀종", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": ""}, {"empid": "T240941", "name": "곽동환", "ac": "A330", "qual": "기장", "dept": "기장/A330", "note": ""}, {"empid": "T140089", "name": "하효성", "ac": "A330", "qual": "기장", "dept": "기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T140137", "name": "이웅희", "ac": "A330", "qual": "기장", "dept": "기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T150055", "name": "박진혁", "ac": "A330", "qual": "기장", "dept": "기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T150138", "name": "유승우", "ac": "A330", "qual": "기장", "dept": "기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T170198", "name": "이현찬", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T170199", "name": "김희태", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T170201", "name": "이진호", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T170271", "name": "김민기", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T170272", "name": "황지훈", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180003", "name": "구대교", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180027", "name": "윤태웅", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180029", "name": "박상웅", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180030", "name": "소선호", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180034", "name": "김주원", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180155", "name": "송덕용", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180165", "name": "이성구", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180219", "name": "이강봉", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180223", "name": "이우경", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180225", "name": "박성우", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180226", "name": "이동혁", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180228", "name": "이상무", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180229", "name": "민지홍", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180230", "name": "김승태", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180332", "name": "이용직", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180333", "name": "이승재", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180336", "name": "이승노", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T180338", "name": "김푸른", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190016", "name": "이명재", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190018", "name": "홍지우", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190085", "name": "장성찬", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190086", "name": "최현규", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190173", "name": "부신웅", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190176", "name": "유진호", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190177", "name": "신승화", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190178", "name": "백성정", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190181", "name": "황수현", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190182", "name": "조연수", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190184", "name": "박민", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190186", "name": "강윤", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190187", "name": "이예찬", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190188", "name": "김가온", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190189", "name": "황승하", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190190", "name": "황정훈", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190299", "name": "강성재", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190301", "name": "김진철", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190303", "name": "강진영", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190411", "name": "황명하", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190413", "name": "공성지", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190447", "name": "박재인", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T190451", "name": "임희선", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T230202", "name": "이현조", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T230205", "name": "김준혁", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": "기종전환대상"}, {"empid": "T230426", "name": "박문진", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T230427", "name": "최항용", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T230428", "name": "김명선", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T230429", "name": "변제구", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T230430", "name": "김민", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T230591", "name": "정승섭", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T240506", "name": "안효진", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T240507", "name": "배국한", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T240508", "name": "옥동", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T240509", "name": "정신재", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T240510", "name": "김홍찬", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T240584", "name": "서기원", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T240586", "name": "김태훈", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T250258", "name": "신동운", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T250259", "name": "윤성국", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T250308", "name": "김진명", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T250309", "name": "강석환", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T250310", "name": "조강희", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T260002", "name": "김종운", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T260003", "name": "김기명", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T260005", "name": "이현건", "ac": "A330", "qual": "부기장", "dept": "선임부기장/A330", "note": ""}, {"empid": "T230413", "name": "정영민", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": "기종전환대상"}, {"empid": "T230415", "name": "박용우", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": "기종전환대상"}, {"empid": "T230431", "name": "소성훈", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": "기종전환대상"}, {"empid": "T230435", "name": "김상길", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": "기종전환대상"}, {"empid": "T230633", "name": "김지원", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": "기종전환대상"}, {"empid": "T250311", "name": "공대열", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": ""}, {"empid": "T250313", "name": "조인호", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": ""}, {"empid": "T250314", "name": "강민호", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": ""}, {"empid": "T260007", "name": "문종현", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": ""}, {"empid": "T260008", "name": "이태호", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": ""}, {"empid": "T260011", "name": "김민재", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": ""}, {"empid": "T260145", "name": "지혁배", "ac": "A330", "qual": "부기장", "dept": "부기장/A330", "note": ""}, {"empid": "T260004", "name": "김현수", "ac": "A330", "qual": "부기장", "dept": "수습부기장/A330", "note": ""}, {"empid": "T260010", "name": "이철홍", "ac": "A330", "qual": "부기장", "dept": "수습부기장/A330", "note": ""}, {"empid": "T260142", "name": "김송하", "ac": "A330", "qual": "부기장", "dept": "부기장훈련요원/A330", "note": ""}, {"empid": "T260143", "name": "설민찬", "ac": "A330", "qual": "부기장", "dept": "부기장훈련요원/A330", "note": ""}, {"empid": "T260144", "name": "김동효", "ac": "A330", "qual": "부기장", "dept": "부기장훈련요원/A330", "note": ""}, {"empid": "T260146", "name": "김범수", "ac": "A330", "qual": "부기장", "dept": "부기장훈련요원/A330", "note": ""}, {"empid": "T260148", "name": "강필성", "ac": "A330", "qual": "부기장", "dept": "부기장훈련요원/A330", "note": ""}, {"empid": "T190449", "name": "남궁준호", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230058", "name": "김재영", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230199", "name": "이준헌", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": ""}, {"empid": "T230321", "name": "신한욱", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230323", "name": "박진호", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230437", "name": "김병철", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230485", "name": "문용현", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230594", "name": "백지운", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230596", "name": "이종혁", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230599", "name": "서우석", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T230637", "name": "안태호", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240202", "name": "박도하", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240205", "name": "조민석", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240206", "name": "노승화", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240207", "name": "어철", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240210", "name": "김정훈", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240484", "name": "이창우", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240587", "name": "류형중", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240593", "name": "홍용후", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240596", "name": "조동녘", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "T240602", "name": "김윤수", "ac": "A330", "qual": "부기장", "dept": "부기장전환훈련요원/A330", "note": "기종전환대상"}, {"empid": "D250002", "name": "하승홍", "ac": "A330", "qual": "기장", "dept": "SVP2", "note": ""}, {"empid": "K0102126", "name": "김윤규", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K0102874", "name": "서성원", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K0200362", "name": "양호근", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K0401015", "name": "장원일", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K0702671", "name": "이장혁", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K0703430", "name": "장희준", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K1401352", "name": "임현철", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K1501813", "name": "김성규", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2383220", "name": "정찬영", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2383835", "name": "장윤익", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2412256", "name": "임병희", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2435199", "name": "조소연", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2557498", "name": "안종국", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2579889", "name": "이해설", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2583783", "name": "선종록", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K2659810", "name": "김성민", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K9600850", "name": "서노현", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K9703864", "name": "이민규", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K9800092", "name": "백승관", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K9801271", "name": "김동만", "ac": "B777", "qual": "기장", "dept": "기장/B777", "note": ""}, {"empid": "K1701932", "name": "고봉진", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1702105", "name": "김영돈", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1702153", "name": "심은섭", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1702315", "name": "김동원", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1702444", "name": "정태섭", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1702525", "name": "최승규", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1703133", "name": "이유석", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1800013", "name": "한기열", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1802021", "name": "박훈희", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1802113", "name": "공용상", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1802135", "name": "오영훈", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1802150", "name": "정창후", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1802183", "name": "김준섭", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1802802", "name": "성재우", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1803012", "name": "조명선", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1803690", "name": "이정훈", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1803771", "name": "정직한", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}, {"empid": "K1902250", "name": "이민형", "ac": "B777", "qual": "부기장", "dept": "부기장/B777", "note": ""}];
 const STORAGE_KEY_CREW = 'selos_crew_v1';
 
-async function processCrewFile(file) {
-  if(!file) return;
+async function ensureXLSXLoaded() {
   if(!window.XLSX){
     const s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
     document.head.appendChild(s);
     await new Promise(res=>s.onload=res);
   }
+}
+// 신규 포맷: "인원현황조회-기종" 엑셀 (사번/이름/직급/기종전환/구분)
+//   - 구분 컬럼 예: "B737(기장)" → 기종=B737, 자격=기장
+// 구형 포맷: 사번/성명(이름)/기종/자격/소속/비고
+function parseCrewSheet(raw) {
+  const COL_OLD={'사번':'empid','성명':'name','이름':'name','기종':'ac','자격':'qual','소속':'dept','비고':'note'};
+  const newCrew=[];
+  raw.forEach(row=>{
+    const keys=Object.keys(row).map(k=>k.trim());
+    const hasGubun = keys.includes('구분');
+    const r={empid:'',name:'',ac:'',qual:'',dept:'',note:''};
+    if(hasGubun) {
+      Object.entries(row).forEach(([k,v])=>{
+        const key=k.trim();
+        if(key==='사번') r.empid=String(v||'').trim();
+        if(key==='이름') r.name=String(v||'').trim();
+        if(key==='직급') r.dept=String(v||'').trim();
+        if(key==='기종전환') r.note = String(v||'').trim()==='Y' ? '기종전환대상' : '';
+      });
+      const gubun = String(row['구분']||'').trim();
+      const m = gubun.match(/^([A-Za-z0-9]+)\(([^)]+)\)/);
+      if(m){ r.ac=m[1]; r.qual=m[2]; }
+    } else {
+      Object.entries(row).forEach(([k,v])=>{const key=COL_OLD[k.trim()];if(key)r[key]=String(v||'').trim();});
+    }
+    if(!r.empid&&!r.name) return;
+    newCrew.push(r);
+  });
+  return newCrew;
+}
+// 파일 1개 처리 — 해당 파일에 포함된 기종만 갱신(다른 기종 데이터는 유지)
+async function processCrewFile(file, opts) {
+  if(!file) return 0;
+  await ensureXLSXLoaded();
   const ab=await file.arrayBuffer();
   const wb=XLSX.read(ab,{type:'array'});
   const ws=wb.Sheets[wb.SheetNames[0]];
   const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
-  const COL={'사번':'empid','성명':'name','이름':'name','기종':'ac','자격':'qual','소속':'dept','비고':'note'};
-  const newCrew=[];
-  raw.forEach(row=>{
-    const r={empid:'',name:'',ac:'',qual:'',dept:'',note:''};
-    Object.entries(row).forEach(([k,v])=>{const key=COL[k.trim()];if(key)r[key]=String(v||'').trim();});
-    if(!r.empid&&!r.name) return;
-    newCrew.push(r);
-  });
-  if(!newCrew.length){alert('유효한 데이터가 없습니다.');return;}
-  crewDB.splice(0,crewDB.length,...newCrew);
-  try{localStorage.setItem(STORAGE_KEY_CREW,JSON.stringify(crewDB));}catch(e){}
-  const st=$('crew-upload-status');
-  if(st){st.textContent=`✅ ${newCrew.length}명 운항승무원 데이터 업로드 완료`;st.style.display='block';}
+  const newCrew = parseCrewSheet(raw);
+  if(!newCrew.length){ if(!opts?.silent) alert(`유효한 데이터가 없습니다. (${file.name})`); return 0; }
+  const acsInFile = new Set(newCrew.map(r=>r.ac).filter(Boolean));
+  for(let i=crewDB.length-1;i>=0;i--){ if(acsInFile.has(crewDB[i].ac)) crewDB.splice(i,1); }
+  crewDB.push(...newCrew);
+  return newCrew.length;
+}
+// 여러 파일(기종별 파일 여러 개)을 한번에 업로드 — 인원현황조회-기종 파일 3개를 한번에 드래그/선택 가능
+async function processCrewFiles(fileList) {
+  const files = Array.from(fileList||[]).filter(Boolean);
+  if(!files.length) return;
+  let total=0;
+  for(const f of files) total += await processCrewFile(f, {silent:true});
+  saveCrewToCloud();
   renderCrew();
   updateCrewDatalist();
+  const st=$('crew-upload-status');
+  if(st){
+    st.textContent=`✅ 파일 ${files.length}개 처리 완료 · 이번에 반영된 인원 ${total}명 (전체 ${crewDB.length}명) · ☁️ 클라우드 저장 중...`;
+    st.style.display='block';
+  }
 }
-
-// localStorage에서 crew 로드
-(function(){
-  try{
-    const cr=localStorage.getItem(STORAGE_KEY_CREW);
-    if(cr){const p=JSON.parse(cr);if(p.length)crewDB.splice(0,crewDB.length,...p);}
-  }catch(e){}
-})();
+// (crew 초기 로드는 loadCrewFromCloud()에서 앱 시작 시 처리됨)
 
 function renderCrew() {
   const kw  = ($('crew-search')?.value||'').trim().toLowerCase();
@@ -2910,12 +3134,14 @@ renderCal = function() {
 // ══════════════════════════════════════════════════════════════════
 // 통계 팝업 - doOpen* (완전히 독립, override 없음)
 // ══════════════════════════════════════════════════════════════════
+let _lastFailDrawerRows = [];
 function doOpenFailDrawer() {
   const range=PERIOD_RANGES[statMode]?.[statPeriodKey];
   const ac=$('stat-ac')?.value||'전체';
   let all=(typeof _lastStatRows!=='undefined'&&_lastStatRows.length>0)
     ?_lastStatRows:dbFilter(ac,range)||[];
   const rows=all.filter(r=>r.result==='불합격');
+  _lastFailDrawerRows = rows;
   const sub=$('fail-drawer-sub');
   if(sub) sub.textContent=`${statPeriodKey||''} · 불합격 ${rows.length}건`;
   const tbody=$('fail-drawer-tbody');
@@ -2931,6 +3157,14 @@ function doOpenFailDrawer() {
       </tr>`).join('');
   const el=$('fail-drawer');
   if(el){el.style.display='flex';el.classList.add('open');}
+}
+function exportFailDrawerExcel() {
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','기종','자격','사번','이름','심사일','심사관'],
+    _lastFailDrawerRows.map((r,i)=>[i+1,r.simline,r.type,r.subtype||'—',r.ac,r.qual||'—',r.empid||'—',r.name,r.date,r.examiner||'—']),
+    `불합격심사상세_${statPeriodKey||''}.csv`);
+}
+async function exportFailDrawerPDF() {
+  await exportModalTableAsPDF('fail-drawer-tbl', `불합격심사상세_${statPeriodKey||''}`, event);
 }
 
 function doOpenExaminerDrawer() {
@@ -2975,6 +3209,7 @@ function saveExaminer() {
     sim:$('ex-sim').value==='true',line:$('ex-line').value==='true',
     period:g('ex-period')||'—',status:'활동중'});
   closeExaminerModal(); renderExaminer();
+  saveExaminerToCloud();
 }
 
 // ── TopBar 엑셀: 현재 active 페이지 감지 ──
@@ -2997,20 +3232,16 @@ function setQualmSL(val) {
   renderQualm();
 }
 
-// ── 만료 상태 계산 함수 ──
-// qualmYm = 'YYYY-MM' 형식의 적격월 기준월
-// today = 현재 날짜 Date 객체
-// 로직: 기준월 <= 이번달 → 만료임박, 기준월 < 이번달(이미 지났으면) → 만료됨
-function calcQualmStatus(qualmYm) {
-  const today = new Date();
-  const todayYm = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-  const [qy, qm] = qualmYm.split('-').map(Number);
-  const [ty, tm] = todayYm.split('-').map(Number);
-  const qTotal = qy * 12 + qm;
-  const tTotal = ty * 12 + tm;
-  if (qTotal < tTotal) return '만료됨';      // 기준월이 이미 지난 달
-  if (qTotal === tTotal) return '만료임박';   // 기준월 = 이번달
-  if (qTotal === tTotal + 1) return '만료임박'; // 다음달까지 봐야 함
+// ── 만료 상태 계산 함수 (배경색 표시용, 화면에 별도 컬럼은 없음) ──
+// expDate = 'YYYY-MM-DD' 형식의 만료일 (최근 정기심사일 + 1년)
+// 로직: 이미 지났으면 만료됨 · 30일 이내면 만료임박 · 그 외 정상
+function calcQualmStatus(expDate) {
+  if(!expDate || expDate==='—') return '정상';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(expDate);
+  const diffDays = Math.round((exp - today)/(1000*60*60*24));
+  if (diffDays < 0)  return '만료됨';
+  if (diffDays <= 30) return '만료임박';
   return '정상';
 }
 
@@ -3023,7 +3254,7 @@ renderQualm = function() {
   // qualmDB에 simline 필드가 없으면 디폴트 LINE 처리
   const kw = ($('qualm-search')?.value||'').trim().toLowerCase();
   const rows = qualmDB
-    .map(r=>({...r, status: calcQualmStatus(r.qualmYm), simline: r.simline||'LINE'}))
+    .map(r=>({...r, status: calcQualmStatus(r.expDate), simline: r.simline||'LINE'}))
     .filter(r=>
       (ac==='전체'||r.ac===ac) &&
       (role==='전체'||r.role===role) &&
@@ -3033,7 +3264,7 @@ renderQualm = function() {
     );
 
   const alertCnt = qualmDB
-    .map(r=>calcQualmStatus(r.qualmYm))
+    .map(r=>calcQualmStatus(r.expDate))
     .filter(s=>s==='만료임박'||s==='만료됨').length;
 
   $('badge-qualm').textContent = alertCnt;
@@ -3044,18 +3275,15 @@ renderQualm = function() {
     badge.style.display = alertCnt>0?'inline':'none';
   }
 
-  const statusCls = s => s==='만료됨'?'tag-fail':s==='만료임박'?'tag-인정':'tag-pass';
-
   const rowCls = s => s==='만료됨'?'qualm-row-expired':s==='만료임박'?'qualm-row-imminent':'';
 
   $('qualm-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="10" class="empty-state">해당 조건의 데이터가 없습니다</td></tr>`
+    ? `<tr><td colspan="9" class="empty-state">해당 조건의 데이터가 없습니다</td></tr>`
     : rows.map((r,i)=>`<tr class="${rowCls(r.status)}">
         <td>${i+1}</td><td>${acDot(r.ac)}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td>${r.role}</td><td>${r.empid}</td><td>${r.name}</td>
         <td>${r.lastDate}</td><td>${r.qualmYm}</td><td>${r.expDate}</td>
-        <td><span class="badge-tag ${statusCls(r.status)}">${r.status}</span></td>
       </tr>`).join('');
 };
 
@@ -3070,10 +3298,10 @@ function resetQualm() {
 function exportQualmExcel() {
   const ac=$('qualm-ac')?.value||'전체';
   const rows=qualmDB
-    .map(r=>({...r,status:calcQualmStatus(r.qualmYm),simline:r.simline||'LINE'}))
+    .map(r=>({...r,simline:r.simline||'LINE'}))
     .filter(r=>ac==='전체'||r.ac===ac);
-  exportCSV(['No','기종','SIM/LINE','구분','사번','이름','자격','최근심사일','적격월','만료예정','상태'],
-    rows.map((r,i)=>[i+1,r.ac,r.simline,r.role,r.empid,r.name,r.qual,r.lastDate,r.qualmYm,r.expDate,r.status]),
+  exportCSV(['No','기종','SIM/LINE','구분','사번','이름','최근심사일','적격월','만료일'],
+    rows.map((r,i)=>[i+1,r.ac,r.simline,r.role,r.empid,r.name,r.lastDate,r.qualmYm,r.expDate]),
     `적격월_${ac}.csv`);
 }
 
@@ -3085,10 +3313,12 @@ function deletePlanRow(id) {
   const idx = DB.findIndex(r=>r.id===id);
   if(idx>-1) DB.splice(idx,1);
   renderPlan();
+  saveToStorage();
 }
 
 // renderPlan 삭제 버튼 포함 재정의
 const _renderPlanBase = renderPlan;
+let planSelectedIds = new Set();
 renderPlan = function() {
   const ac = $('plan-ac')?.value||'전체';
   const sl = $('plan-simline')?.value||'전체';
@@ -3096,10 +3326,14 @@ renderPlan = function() {
   const rows = DB.filter(r=>
     (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) && r.date.startsWith(ym)
   );
+  // 화면에서 사라진 행의 선택 상태는 정리
+  const visibleIds = new Set(rows.map(r=>r.id));
+  [...planSelectedIds].forEach(id=>{ if(!visibleIds.has(id)) planSelectedIds.delete(id); });
   const tbody = $('plan-tbody');
   tbody.innerHTML = rows.length===0
-    ? `<tr><td colspan="14" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
+    ? `<tr><td colspan="15" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
     : rows.map((r,i)=>`<tr>
+        <td class="center"><input type="checkbox" class="plan-row-check" data-id="${r.id}" ${planSelectedIds.has(r.id)?'checked':''} onchange="togglePlanRowSelect(${r.id},this.checked)"></td>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td><span class="badge-tag ${r.type==='정기'?'tag-정기':'tag-인정'}">${r.type}</span></td>
@@ -3111,7 +3345,32 @@ renderPlan = function() {
             onclick="deletePlanRow(${r.id})"><i class="ti ti-trash" style="font-size:12px"></i></button>
         </td>
       </tr>`).join('');
+  const selAll=$('plan-select-all'); if(selAll) selAll.checked = rows.length>0 && rows.every(r=>planSelectedIds.has(r.id));
 };
+
+function togglePlanRowSelect(id, checked) {
+  if(checked) planSelectedIds.add(id); else planSelectedIds.delete(id);
+  const selAll=$('plan-select-all');
+  if(selAll){
+    const boxes=[...document.querySelectorAll('.plan-row-check')];
+    selAll.checked = boxes.length>0 && boxes.every(b=>b.checked);
+  }
+}
+function togglePlanSelectAll(box) {
+  document.querySelectorAll('.plan-row-check').forEach(el=>{
+    el.checked = box.checked;
+    const id=Number(el.dataset.id);
+    if(box.checked) planSelectedIds.add(id); else planSelectedIds.delete(id);
+  });
+}
+function deleteSelectedPlanRows() {
+  if(planSelectedIds.size===0){ alert('삭제할 항목을 선택해주세요.'); return; }
+  if(!confirm(`선택한 ${planSelectedIds.size}건의 심사계획을 삭제하시겠습니까?`)) return;
+  for(let i=DB.length-1;i>=0;i--){ if(planSelectedIds.has(DB[i].id)) DB.splice(i,1); }
+  planSelectedIds.clear();
+  renderPlan();
+  saveToStorage();
+}
 
 // ══════════════════════════════════════════════════════════════════
 // 달력 이벤트 팝업
@@ -3278,6 +3537,46 @@ function exportCalExcel() {
   a.click(); URL.revokeObjectURL(a.href);
 }
 
+// ── 심사달력 화면 그대로 PDF 다운로드 ──
+// ── 공용: 특정 요소(테이블/카드 등)를 화면 그대로 캡처해 PDF로 저장 ──
+async function exportElementAsPDF(elId, filename, evt, opts) {
+  const target = $(elId);
+  if(!target){ alert('대상 화면을 찾을 수 없습니다.'); return; }
+  if(!window.html2canvas || !window.jspdf){
+    alert('PDF 생성 라이브러리를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  const btn = evt?.target?.closest('button');
+  const origLabel = btn ? btn.innerHTML : null;
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader-2"></i> 생성 중...'; }
+  try {
+    const canvas = await html2canvas(target, {scale:2, backgroundColor:'#FFFFFF', useCORS:true});
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const orientation = (opts&&opts.orientation) || (canvas.width>canvas.height?'landscape':'portrait');
+    const pageW = orientation==='landscape'?297:210, pageH = orientation==='landscape'?210:297; // A4 (mm)
+    const ratio = Math.min(pageW/(canvas.width/2), pageH/(canvas.height/2));
+    const imgW = (canvas.width/2) * ratio;
+    const imgH = (canvas.height/2) * ratio;
+    const pdf = new jsPDF({orientation, unit:'mm', format:'a4'});
+    const x = (pageW - imgW)/2, y = (pageH - imgH)/2;
+    pdf.addImage(imgData, 'PNG', x, y, imgW, imgH);
+    pdf.save(`${filename}.pdf`);
+  } catch(e) {
+    console.error(e);
+    alert('⚠️ PDF 생성 실패: '+e.message);
+  } finally {
+    if(btn && origLabel){ btn.disabled=false; btn.innerHTML=origLabel; }
+  }
+}
+async function exportModalTableAsPDF(tableId, filename, evt) {
+  await exportElementAsPDF(tableId, filename, evt, {orientation:'portrait'});
+}
+
+async function exportCalPDF() {
+  await exportElementAsPDF('cal-wrap-capture', `심사달력_${calYear}년${calMonth}월_${$('cal-ac')?.value||'전체'}`, event, {orientation:'landscape'});
+}
+
 // ══════════════════════════════════════════════════════════════════
 // 통계 드로어
 // ══════════════════════════════════════════════════════════════════
@@ -3348,8 +3647,12 @@ calcAndDrawStat = function(ac) {
 
 
 
+let _lastExaminerDetailRows = [];
+let _lastExaminerDetailName = '';
 function openExaminerDetail(name) {
   const rows = DB.filter(r=>r.examiner.includes(name));
+  _lastExaminerDetailRows = rows;
+  _lastExaminerDetailName = name;
   $('examiner-detail-title').textContent = `${name} · 전체 심사 내역 (${rows.length}건)`;
   $('examiner-detail-tbody').innerHTML = rows.length===0
     ? `<tr><td colspan="9" class="empty-state">심사 내역 없음</td></tr>`
@@ -3362,6 +3665,14 @@ function openExaminerDetail(name) {
         <td class="center"><span class="badge-tag ${r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend'}">${r.result||'미입력'}</span></td>
       </tr>`).join('');
   $('examiner-detail-modal').classList.add('open');
+}
+function exportExaminerDetailExcel() {
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','기종','이름','심사일','편명','결과'],
+    _lastExaminerDetailRows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,r.ac,r.name,r.date,r.flight,r.result||'미입력']),
+    `심사관_${_lastExaminerDetailName}_심사내역.csv`);
+}
+async function exportExaminerDetailPDF() {
+  await exportModalTableAsPDF('examiner-detail-tbl', `심사관_${_lastExaminerDetailName}_심사내역`, event);
 }
 
 function closeDrawer(id) {
