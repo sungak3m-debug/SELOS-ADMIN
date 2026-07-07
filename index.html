@@ -2378,13 +2378,6 @@ function setupRealtimeSync() {
   });
 }
 
-// 업로드 완료 후 자동 저장 훅 (processExcelFile 자체에 saveToStorage 포함됨)
-const _origProcessQualm = processQualmFile;
-processQualmFile = async function(file) {
-  await _origProcessQualm(file);
-  saveToStorage();
-};
-
 // 앱 시작 시 클라우드 데이터 로드 + 실시간 동기화 시작
 loadFromStorage().then(()=>{
   loadCrewFromCloud();
@@ -3130,6 +3123,7 @@ async function processQualmFile(file){
   const st=$('qualm-upload-status');
   if(st){st.textContent=`✅ ${newQualm.length}건 적격월 업로드 완료`;st.style.display='block';}
   renderQualm();
+  saveToStorage(); // 클라우드 자동 저장 (실제 함수 정의 바로 뒤에서 훅을 걸어야 ReferenceError가 안 남)
 }
 
 // ══════════════════════════════════════════════════════════════════
