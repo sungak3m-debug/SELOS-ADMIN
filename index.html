@@ -272,6 +272,8 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 .cal-event:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.13);position:relative;z-index:2}
 .cal-ev-line-정기{background:linear-gradient(135deg,#EEF3F8,#E5EDF7);color:#3A5F82;border-color:#C8D8EC;border-left-color:#5B7FA6}
 .cal-ev-line-인정{background:linear-gradient(135deg,#F8F0EE,#F3E8E4);color:#7A4840;border-color:#E8C8C0;border-left-color:#C87868}
+.cal-ev-sim-정기{background:linear-gradient(135deg,#F7F3ED,#EFE7DC);color:#6A5030;border-color:#E0D0B8;border-left-color:#8A6B3A}
+.cal-ev-sim-인정{background:linear-gradient(135deg,#FBF0E4,#F5E2CE);color:#8A5A28;border-color:#EAD2AC;border-left-color:#C88A3A}
 .cal-ev-sim{background:linear-gradient(135deg,#F7F3ED,#EFE7DC);color:#6A5030;border-color:#E0D0B8;border-left-color:#8A6B3A}
 .cal-ev-특수{background:linear-gradient(135deg,#F0EDF8,#E8E3F5);color:#5A4080;border-color:#D0C4EC;border-left-color:#8A75B0}
 .cal-ev-type{font-size:8.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;opacity:.65;margin-bottom:2px}
@@ -346,11 +348,26 @@ select{font-family:inherit}
 /* ── 적격월 행 상태별 음영 ── */
 .qualm-row-expired td{background:#FEF0EE !important;color:#8B3A3A}
 .qualm-row-expired td .badge-tag{background:#F8DCDC;color:#8B3A3A;border-color:#E8BCBC}
+.qualm-row-expired td .badge-tag.tag-pass{background:#DCF0DC;color:#2F6B2F;border-color:#B8DCB8}
 .qualm-row-expired:hover td{background:#FBDADA !important}
 .qualm-row-imminent td{background:#FEF8EC !important}
+.qualm-row-imminent td .badge-tag.tag-fail{background:#F8DCDC;color:#8B3A3A;border-color:#E8BCBC}
+.qualm-row-imminent td .badge-tag.tag-pass{background:#DCF0DC;color:#2F6B2F;border-color:#B8DCB8}
 .qualm-row-imminent:hover td{background:#FDEFD0 !important}
 
-/* ── 월 피커 ── */
+/* ── 큰 Month 네비게이션 (심사계획/심사결과) ── */
+.big-month-nav{
+  display:flex;align-items:center;justify-content:center;gap:16px;
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:12px 16px;margin-bottom:12px;
+}
+.big-month-nav-btn{
+  width:34px;height:34px;border-radius:8px;border:1px solid var(--border2);background:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--muted);flex-shrink:0;
+}
+.big-month-nav-btn:hover{border-color:var(--rg);color:var(--rg)}
+.big-month-nav-title{font-size:20px;font-weight:800;color:var(--navy);min-width:140px;text-align:center;letter-spacing:-.5px}
+
 .month-picker{
   position:absolute;top:calc(100% + 6px);left:0;z-index:999;
   background:#fff;border:1px solid var(--border2);border-radius:10px;
@@ -479,12 +496,11 @@ select{font-family:inherit}
   <div class="main-content">
     <div class="top-bar">
       <span class="top-bar-title" id="top-title">통계</span>
-      <span class="top-bar-sep">|</span>
-      <span class="top-bar-sub" id="top-sub"></span>
       <div class="top-bar-actions" id="topbar-actions">
         <button class="btn btn-excel btn-sm" onclick="topBarExcel()"><i class="ti ti-file-spreadsheet"></i> 리포트 다운</button>
       </div>
     </div>
+    <span id="top-sub" style="display:none"></span>
     <div class="page-content">
 
       <!-- ─── 통계 ─── -->
@@ -576,7 +592,7 @@ select{font-family:inherit}
             <button class="qsl-btn" onclick="setQualmSL('LINE')">LINE</button>
             <button class="qsl-btn" onclick="setQualmSL('SIM')">SIM</button>
           </div>
-          <span style="font-size:10px;color:var(--muted)">· 적격월 = 최근 심사일 기준 ±1개월 (총 3개월 유효)</span>
+          <span style="font-size:10px;color:var(--muted)">· LINE = 최초 심사월 기준 매년 1회 · SIM = 최초 심사월 + 6개월, 연 2회 · 적격기간은 해당월+다음달(12월은 11·12월)</span>
         </div>
         <div class="filter-bar">
           <div class="filter-item"><span class="filter-label">기종</span>
@@ -602,6 +618,12 @@ select{font-family:inherit}
             <button class="btn btn-outline btn-sm" onclick="resetQualm()">초기화</button>
           </div>
         </div>
+        <div class="big-month-nav">
+          <button class="big-month-nav-btn" onclick="qualmMonthPrev()">‹</button>
+          <span class="big-month-nav-title" id="qualm-month-big">2026년 7월</span>
+          <button class="big-month-nav-btn" onclick="qualmMonthNext()">›</button>
+        </div>
+        <div style="text-align:center;font-size:11px;color:var(--muted);margin:-6px 0 12px">이 달에 적격월(심사 예정)이 도달하는 운항승무원을 보여줍니다</div>
         <div class="table-card">
           <div class="table-head">
             <span class="table-title">적격월 현황 <span class="badge-num" id="qualm-alert-badge"></span></span>
@@ -609,7 +631,7 @@ select{font-family:inherit}
           <table class="tbl">
             <thead><tr>
               <th>No</th><th>기종</th><th>SIM/LINE</th><th>구분</th><th>사번</th><th>이름</th>
-              <th>최근 심사일</th><th>적격월</th><th>만료일</th>
+              <th>적격월</th><th>최근 심사일</th><th>만료일</th><th class="center">현재상태</th>
             </tr></thead>
             <tbody id="qualm-tbody"></tbody>
           </table>
@@ -638,6 +660,11 @@ select{font-family:inherit}
             <button class="btn btn-excel btn-sm" id="plan-excel-btn"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
           </div>
         </div>
+        <div class="big-month-nav">
+          <button class="big-month-nav-btn" onclick="planMonthPrev()">‹</button>
+          <span class="big-month-nav-title" id="plan-month-big">2026년 5월</span>
+          <button class="big-month-nav-btn" onclick="planMonthNext()">›</button>
+        </div>
         <div class="table-card">
           <div class="table-head"><span class="table-title">심사계획 목록</span>
             <button class="btn btn-primary btn-sm" id="plan-add-btn" onclick="openPlanModal()"><i class="ti ti-plus"></i> 추가</button>
@@ -660,10 +687,26 @@ select{font-family:inherit}
           <div class="filter-item"><span class="filter-label">기종</span>
             <select class="filter-select" id="cal-ac" onchange="renderCal()"></select>
           </div>
+          <div class="filter-item"><span class="filter-label">SIM/LINE</span>
+            <select class="filter-select" id="cal-simline" onchange="renderCal()">
+              <option value="전체">전체</option><option>LINE</option><option>SIM</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <div class="search-input"><i class="ti ti-search"></i>
+              <input id="cal-search" placeholder="이름/사번/심사관/편명/장소 검색" oninput="renderCal()" style="width:200px">
+            </div>
+          </div>
           <div class="filter-actions" style="margin-left:auto">
+            <button class="btn btn-outline btn-sm" onclick="resetCalFilter()">초기화</button>
             <button class="btn btn-outline btn-sm" onclick="exportCalPDF()"><i class="ti ti-file-type-pdf"></i> PDF 다운</button>
             <button class="btn btn-excel btn-sm" onclick="exportCalExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀 다운</button>
           </div>
+        </div>
+        <div class="big-month-nav">
+          <button class="big-month-nav-btn" onclick="calPrev()">‹</button>
+          <span class="big-month-nav-title" id="cal-month-big">2026년 5월</span>
+          <button class="big-month-nav-btn" onclick="calNext()">›</button>
         </div>
         <div class="cal-wrap" id="cal-wrap-capture">
           <div class="cal-nav">
@@ -673,7 +716,8 @@ select{font-family:inherit}
             <div class="cal-legend" style="margin-left:auto">
               <div class="cal-leg-item"><div class="cal-leg-dot" style="background:#5B7FA6;border-radius:3px"></div>LINE 정기</div>
               <div class="cal-leg-item"><div class="cal-leg-dot" style="background:#C87868;border-radius:3px"></div>LINE 인정</div>
-              <div class="cal-leg-item"><div class="cal-leg-dot" style="background:#8A6B3A;border-radius:3px"></div>SIM</div>
+              <div class="cal-leg-item"><div class="cal-leg-dot" style="background:#8A6B3A;border-radius:3px"></div>SIM 정기</div>
+              <div class="cal-leg-item"><div class="cal-leg-dot" style="background:#C88A3A;border-radius:3px"></div>SIM 인정</div>
               <div class="cal-leg-item"><div class="cal-leg-dot" style="background:#8A75B0;border-radius:3px"></div>특수</div>
               <div class="cal-leg-item"><span class="cal-set-dot"></span>SET</div>
             </div>
@@ -716,6 +760,11 @@ select{font-family:inherit}
             <button class="btn btn-primary btn-sm" style="background:#5A7A9A" onclick="saveResults()"><i class="ti ti-device-floppy"></i> 저장</button>
             <button class="btn btn-excel btn-sm" onclick="exportResultExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
           </div>
+        </div>
+        <div class="big-month-nav">
+          <button class="big-month-nav-btn" onclick="resultMonthPrev()">‹</button>
+          <span class="big-month-nav-title" id="result-month-big">2026년 5월</span>
+          <button class="big-month-nav-btn" onclick="resultMonthNext()">›</button>
         </div>
         <div class="table-card">
           <div class="table-head">
@@ -810,13 +859,29 @@ select{font-family:inherit}
         <div class="filter-bar">
           <div class="filter-item">
             <div class="search-input"><i class="ti ti-search"></i>
-              <input id="crew-search" placeholder="사번 또는 이름 검색" oninput="renderCrew()">
+              <input id="crew-search-empid" placeholder="사번 검색" oninput="renderCrew()" style="width:100px">
+            </div>
+          </div>
+          <div class="filter-item">
+            <div class="search-input"><i class="ti ti-search"></i>
+              <input id="crew-search-name" placeholder="이름 검색" oninput="renderCrew()" style="width:100px">
             </div>
           </div>
           <div class="filter-item"><span class="filter-label">기종</span>
             <select class="filter-select" id="crew-ac" onchange="renderCrew()">
               <option value="전체">전체</option><option>A330</option><option>B737</option><option>B777</option>
             </select>
+          </div>
+          <div class="filter-item"><span class="filter-label">자격</span>
+            <select class="filter-select" id="crew-qual" onchange="renderCrew()">
+              <option value="전체">전체</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <input class="filter-input" id="crew-search-dept" placeholder="소속 검색" oninput="renderCrew()" style="width:110px">
+          </div>
+          <div class="filter-item">
+            <input class="filter-input" id="crew-search-note" placeholder="비고 검색" oninput="renderCrew()" style="width:100px">
           </div>
           <div class="filter-actions" style="margin-left:auto">
             <button class="btn btn-outline btn-sm" onclick="resetCrew()">초기화</button>
@@ -847,6 +912,30 @@ select{font-family:inherit}
               <option>사내 위촉심사관</option>
               <option>CAE 심사관</option>
               <option>국토교통부 심사관</option>
+            </select>
+          </div>
+          <div class="filter-item"><span class="filter-label">코드</span>
+            <select class="filter-select" id="examiner-code" onchange="renderExaminer()">
+              <option value="전체">전체</option>
+              <option value="DLCP">DLCP</option>
+              <option value="DSCP">DSCP</option>
+              <option value="DLCP/DSCP">DLCP/DSCP</option>
+            </select>
+          </div>
+          <div class="filter-item"><span class="filter-label">자격</span>
+            <select class="filter-select" id="examiner-role" onchange="renderExaminer()">
+              <option value="전체">전체</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <input class="filter-input" id="examiner-search-empid" placeholder="사번 검색" oninput="renderExaminer()" style="width:90px">
+          </div>
+          <div class="filter-item">
+            <input class="filter-input" id="examiner-search-name" placeholder="이름 검색" oninput="renderExaminer()" style="width:90px">
+          </div>
+          <div class="filter-item"><span class="filter-label">상태</span>
+            <select class="filter-select" id="examiner-status" onchange="renderExaminer()">
+              <option value="전체">전체</option><option>활동중</option><option>비활동</option><option>만료</option>
             </select>
           </div>
           <div class="filter-actions" style="margin-left:auto">
@@ -1084,40 +1173,12 @@ const ALL_AC = ['전체','A330','B737','B777'];
 let resultYear = new Date().getFullYear(), resultMonth = new Date().getMonth()+1;
 let currentUser = null;
 
-// 심사기록 마스터 데이터 (심사계획+결과 통합 스토어)
-let DB = [
-  {id:1,simline:'LINE',type:'정기',subtype:'기장 정기',  ac:'A330',qual:'C',empid:'5102',name:'김철수', date:'2026-01-08',flight:'TW101 ICN-NRT',examiner:'홍길동 CP',place:'김포공항', result:'합격'},
-  {id:2,simline:'SIM', type:'정기',subtype:'기장 정기',  ac:'A330',qual:'C',empid:'5233',name:'이재민', date:'2026-01-15',flight:'—',            examiner:'박영수 CP',place:'Sim센터',  result:'합격'},
-  {id:3,simline:'LINE',type:'인정',subtype:'부기장 인정',ac:'A330',qual:'F',empid:'5008',name:'한지수', date:'2026-01-22',flight:'TW205 ICN-CJU',examiner:'홍길동 CP',place:'인천공항', result:'합격'},
-  {id:4,simline:'SIM', type:'정기',subtype:'부기장 정기',ac:'B737',qual:'F',empid:'4899',name:'최민아', date:'2026-01-18',flight:'—',            examiner:'강동원 CP',place:'Sim센터',  result:'합격'},
-  {id:5,simline:'LINE',type:'정기',subtype:'기장 정기',  ac:'B737',qual:'C',empid:'5044',name:'박상현', date:'2026-02-05',flight:'TW312 GMP-CJU',examiner:'강동원 CP',place:'김포공항', result:'합격'},
-  {id:6,simline:'SIM', type:'정기',subtype:'기장 정기',  ac:'B777',qual:'C',empid:'4755',name:'정태양', date:'2026-02-10',flight:'—',            examiner:'정우성 CP',place:'Sim센터',  result:'합격'},
-  {id:7,simline:'LINE',type:'인정',subtype:'기장 인정',  ac:'A330',qual:'C',empid:'5102',name:'김철수', date:'2026-02-18',flight:'TW420 ICN-SIN',examiner:'홍길동 CP',place:'인천공항', result:'불합격'},
-  {id:8,simline:'SIM', type:'정기',subtype:'부기장 정기',ac:'A330',qual:'F',empid:'5231',name:'이지현', date:'2026-02-25',flight:'—',            examiner:'박영수 CP',place:'Sim센터',  result:'합격'},
-  {id:9,simline:'LINE',type:'정기',subtype:'기장 정기',  ac:'B737',qual:'C',empid:'4899',name:'최민아', date:'2026-03-04',flight:'TW501 GMP-TAE',examiner:'강동원 CP',place:'대구공항', result:'합격'},
-  {id:10,simline:'SIM',type:'인정',subtype:'부기장 인정',ac:'B777',qual:'F',empid:'5011',name:'윤서연', date:'2026-03-12',flight:'—',            examiner:'정우성 CP',place:'Sim센터',  result:'합격'},
-  {id:11,simline:'LINE',type:'정기',subtype:'기장 정기',  ac:'A330',qual:'C',empid:'5233',name:'이재민', date:'2026-03-20',flight:'TW101 ICN-NRT',examiner:'박영수 CP',place:'인천공항', result:'합격'},
-  {id:12,simline:'SIM', type:'정기',subtype:'기장 정기',  ac:'B737',qual:'C',empid:'5044',name:'박상현', date:'2026-03-25',flight:'—',            examiner:'강동원 CP',place:'Sim센터',  result:'불합격'},
-  {id:13,simline:'LINE',type:'정기',subtype:'기장 정기',  ac:'A330',qual:'C',empid:'5102',name:'김철수', date:'2026-04-08',flight:'TW101 ICN-NRT',examiner:'홍길동 CP',place:'인천공항', result:'합격'},
-  {id:14,simline:'SIM', type:'정기',subtype:'부기장 정기',ac:'B737',qual:'F',empid:'4899',name:'최민아', date:'2026-04-15',flight:'—',            examiner:'강동원 CP',place:'Sim센터',  result:'합격'},
-  {id:15,simline:'LINE',type:'인정',subtype:'부기장 인정',ac:'B777',qual:'F',empid:'5011',name:'윤서연', date:'2026-04-22',flight:'TW701 ICN-LAX',examiner:'정우성 CP',place:'인천공항', result:'합격'},
-  {id:16,simline:'SIM', type:'정기',subtype:'기장 정기',  ac:'A330',qual:'C',empid:'5233',name:'이재민', date:'2026-05-06',flight:'—',            examiner:'박영수 CP',place:'Sim센터',  result:'합격'},
-  {id:17,simline:'LINE',type:'정기',subtype:'부기장 정기',ac:'A330',qual:'F',empid:'5231',name:'이지현', date:'2026-05-12',flight:'TW205 ICN-CJU',examiner:'홍길동 CP',place:'인천공항', result:'합격'},
-  {id:18,simline:'SIM', type:'인정',subtype:'기장 인정',  ac:'B737',qual:'C',empid:'5044',name:'박상현', date:'2026-05-18',flight:'—',            examiner:'강동원 CP',place:'Sim센터',  result:''},
-  {id:19,simline:'LINE',type:'정기',subtype:'기장 정기',  ac:'B777',qual:'C',empid:'4755',name:'정태양', date:'2026-05-20',flight:'TW801 ICN-JFK',examiner:'정우성 CP',place:'인천공항', result:''},
-];
-let nextId = 20;
+// 심사기록 마스터 데이터 (심사계획+결과 통합 스토어) — 심사기록부 엑셀 업로드로 채워집니다
+let DB = [];
+let nextId = 1;
 
-// 적격월 데이터
-const qualmDB = [
-  {ac:'A330',role:'기장', empid:'5102',name:'김철수', qual:'기장 정기',lastDate:'2025-11-10',qualmYm:'2026-05',expDate:'2026-05-31',status:'만료임박'},
-  {ac:'A330',role:'부기장',empid:'5231',name:'이지현', qual:'부기장 정기',lastDate:'2025-12-03',qualmYm:'2026-06',expDate:'2026-06-30',status:'정상'},
-  {ac:'B737',role:'기장', empid:'4899',name:'최민아', qual:'기장 인정',lastDate:'2026-01-15',qualmYm:'2026-07',expDate:'2026-07-31',status:'정상'},
-  {ac:'B737',role:'부기장',empid:'5011',name:'윤서연', qual:'부기장 정기',lastDate:'2025-10-22',qualmYm:'2026-04',expDate:'2026-04-30',status:'만료임박'},
-  {ac:'B777',role:'기장', empid:'4755',name:'정태양', qual:'기장 정기',lastDate:'2026-02-08',qualmYm:'2026-08',expDate:'2026-08-31',status:'정상'},
-  {ac:'B777',role:'부기장',empid:'5011',name:'윤서연', qual:'부기장 정기',lastDate:'2026-03-12',qualmYm:'2026-09',expDate:'2026-09-30',status:'정상'},
-  {ac:'A330',role:'기장', empid:'5233',name:'이재민', qual:'기장 정기',lastDate:'2025-09-05',qualmYm:'2026-03',expDate:'2026-03-31',status:'만료임박'},
-];
+// 적격월 데이터 — 심사기록부 업로드 시 자동 산출됩니다 (computeQualmFromDB)
+const qualmDB = [];
 
 // 심사관 데이터 (심사기록부_통합 기반 — LINE/SIM 횟수 + 소속)
 const examinerDB = [
@@ -1311,6 +1372,7 @@ function initAllSelects() {
 const PAGE_TITLES = {
   stat:['통계',''],qualm:['적격월 관리',''],plan:['심사계획 관리',''],
   cal:['심사달력',''],result:['심사결과 관리',''],record:['심사기록부',''],examiner:['심사관 관리',''],
+  crew:['운항승무원 현황',''],
 };
 const PAGE_MAP = ['qualm','plan','cal','result','record','stat','crew','examiner'];
 
@@ -1644,7 +1706,7 @@ function renderQualm() {
     : rows.map((r,i)=>`<tr>
         <td>${i+1}</td><td>${acDot(r.ac)}</td><td>${r.role}</td>
         <td>${r.empid}</td><td>${r.name}</td><td>${r.qual}</td>
-        <td>${r.lastDate}</td><td>${r.qualmYm}</td><td>${r.expDate}</td>
+        <td>${r.qualmYm}</td><td>${r.lastDate}</td><td>${r.expDate}</td>
         <td><span class="badge-tag ${r.status==='만료임박'?'tag-fail':'tag-pass'}">${r.status}</span></td>
       </tr>`).join('');
 }
@@ -1658,17 +1720,73 @@ function resetQualm() {
 // 그룹 기준: 사번 + 기종 + 구분(role: 기장/부기장/위촉심사관 등)
 // - 적격월(qualmYm)   = 해당 그룹에서 최초로 LINE/SIM 심사가 이뤄진 날짜 (YYYY-MM-DD, 기준일 · 한번 정해지면 더 이른 날짜만 갱신)
 // - 최근 심사일(lastDate) = 해당 그룹에서 "정기" 심사만 골라 가장 최근 날짜 (정기심사 기록이 없으면 전체 중 최근 날짜로 대체)
-// - 만료일(expDate)   = 최근 심사일(정기) 기준 1년 후 날짜
+// - 만료일(expDate)   = 최근 심사일이 속한 적격기간의 "다음 차례" 적격기간 마지막 날 (computeNextExpDate 참고)
 function addOneYear(dateStr) {
   const [y,m,d] = dateStr.split('-').map(Number);
   const dt = new Date(y+1, m-1, d);
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 }
+function addMonths(dateStr, n) {
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m-1+n, d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+// ── 적격월 도달 여부 계산 ──
+// LINE: 최초 심사일의 '월'을 기준으로 매년 1회 (예: 7월 → 매년 7월)
+// SIM : 6개월에 한번(연 2회) → 기준월과 기준월+6 두 달 모두 적격월
+// 적격기간(2개월 창): 기본은 [적격월, 적격월+1] 이지만, 적격월이 12월이면 해를 넘기지 않도록 [11월, 12월]
+function getDueMonths(baseMonth, simline) {
+  if (simline === 'SIM') {
+    const m2 = ((baseMonth + 6 - 1) % 12) + 1;
+    return [baseMonth, m2];
+  }
+  return [baseMonth];
+}
+function getEligWindow(dueMonth) {
+  return dueMonth === 12 ? [11, 12] : [dueMonth, dueMonth + 1];
+}
+function isMonthDueForRow(searchMonth, baseMonth, simline) {
+  const dues = getDueMonths(baseMonth, simline || 'LINE');
+  return dues.some(dm => getEligWindow(dm).includes(searchMonth));
+}
+function getLastDayOfMonth(year, month) {
+  const d = new Date(year, month, 0).getDate();
+  return `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+// ── 만료일 계산 (적격기간 기준) ──
+// 최근 심사일이 속한 적격기간을 찾고, 그 다음 차례 적격기간의 마지막 날을 만료일로 계산
+// 예) SIM, 기준월 6월(적격월 6/12월) → 6월 적격기간(6~7월)에 심사 완료 시,
+//     다음 차례는 12월 적격기간(11~12월) → 만료일 = 그 해 12월 31일
+function computeNextExpDate(lastDate, baseMonth, simline) {
+  const dues = getDueMonths(baseMonth, simline);
+  const LY = parseInt(lastDate.split('-')[0]);
+  const LM = parseInt(lastDate.split('-')[1]);
+  // 최근 심사일이 속한 적격월(현재 차례) 찾기
+  let currentDue = dues.find(dm => getEligWindow(dm).includes(LM));
+  if (currentDue === undefined) {
+    const sorted = [...dues].sort((a,b)=>a-b);
+    currentDue = sorted.filter(dm=>dm<=LM).pop();
+    if (currentDue === undefined) currentDue = sorted[sorted.length-1];
+  }
+  let nextYear, nextMonth;
+  if (simline === 'SIM') {
+    nextMonth = ((currentDue - 1 + 6) % 12) + 1;
+    nextYear = LY + (currentDue + 6 > 12 ? 1 : 0);
+  } else {
+    nextMonth = currentDue;
+    nextYear = LY + 1;
+  }
+  const w2 = getEligWindow(nextMonth)[1];
+  return getLastDayOfMonth(nextYear, w2);
+}
 function computeQualmFromDB() {
+  // 운항승무원 현황(crewDB)이 가장 최신 자격 정보이므로, 사번이 일치하면 crewDB의 자격을 우선 사용
+  const crewQualMap = {};
+  (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewQualMap[c.empid] = c.qual; });
   const groups = {};
   DB.forEach(r=>{
     if(!r.name || !r.date) return;
-    const role = r.qual || '—';
+    const role = (r.empid && crewQualMap[r.empid]) || r.qual || '—';
     const key = `${r.empid||'—'}|${r.ac}|${role}`;
     if(!groups[key]) groups[key] = {ac:r.ac, role, empid:r.empid||'—', name:r.name, simline:r.simline, allDates:[], jeonggiDates:[]};
     groups[key].allDates.push(r.date);
@@ -1679,15 +1797,15 @@ function computeQualmFromDB() {
   Object.values(groups).forEach(g=>{
     g.allDates.sort();
     const firstDate = g.allDates[0];
-    let lastDate, expDate;
+    let lastDate;
     if(g.jeonggiDates.length) {
       g.jeonggiDates.sort();
       lastDate = g.jeonggiDates[g.jeonggiDates.length-1];
-      expDate  = addOneYear(lastDate);
     } else {
       lastDate = g.allDates[g.allDates.length-1]; // 정기심사 기록이 없으면 최근 심사일로 대체
-      expDate  = '—';
     }
+    const baseMonth = parseInt(firstDate.split('-')[1]);
+    const expDate = computeNextExpDate(lastDate, baseMonth, g.simline||'LINE'); // 적격기간 기준 다음 차례 만료일
     const existing = qualmDB.find(q=>q.ac===g.ac && q.role===g.role && q.empid===g.empid);
     if(existing) {
       existing.name = g.name;
@@ -1696,9 +1814,12 @@ function computeQualmFromDB() {
       existing.expDate  = expDate;
       // 적격월(기준일)은 한번 정해지면 더 이른 날짜가 나올 때만 갱신
       if(!existing.qualmYm || firstDate < existing.qualmYm) existing.qualmYm = firstDate;
+      // SIM: 6개월 후 날짜도 두번째 적격월로 저장 (연 2회)
+      existing.qualmYm2 = existing.simline==='SIM' ? addMonths(existing.qualmYm, 6) : null;
     } else {
       qualmDB.push({ac:g.ac, role:g.role, empid:g.empid, name:g.name, simline:g.simline,
-        qualmYm:firstDate, lastDate, expDate});
+        qualmYm:firstDate, qualmYm2: g.simline==='SIM' ? addMonths(firstDate,6) : null,
+        lastDate, expDate});
     }
   });
 }
@@ -1707,15 +1828,15 @@ function computeQualmFromDB() {
 function exportQualmExcel() {
   const ac = $('qualm-ac')?.value||'전체';
   const rows = qualmDB.filter(r=>ac==='전체'||r.ac===ac);
-  exportCSV(['No','기종','구분','사번','이름','최근심사일','적격월','만료일'],
-    rows.map((r,i)=>[i+1,r.ac,r.role,r.empid,r.name,r.lastDate,r.qualmYm,r.expDate]),
+  exportCSV(['No','기종','구분','사번','이름','적격월','최근심사일','만료일'],
+    rows.map((r,i)=>[i+1,r.ac,r.role,r.empid,r.name,r.qualmYm,r.lastDate,r.expDate]),
     `적격월_${ac}.csv`);
 }
 
 // ══════════════════════════════════════════════════════════════════
 // ⑧ 심사계획 관리
 // ══════════════════════════════════════════════════════════════════
-let planYear=2026, planMonth=5;
+let planYear=new Date().getFullYear(), planMonth=new Date().getMonth()+1;
 
 function renderPlan() {
   const ac = $('plan-ac')?.value||'전체';
@@ -1740,7 +1861,7 @@ function applyPlanFilter() { renderPlan(); }
 function resetPlanFilter() {
   $('plan-ac').value=currentUser?.ac||'전체';
   $('plan-simline').value='전체';
-  planYear=2026; planMonth=5; updateMonthLabel('plan'); renderPlan();
+  planYear=new Date().getFullYear(); planMonth=new Date().getMonth()+1; updateMonthLabel('plan'); renderPlan();
 }
 function exportPlanExcel() {
   const ac=$('plan-ac')?.value||'전체', sl=$('plan-simline')?.value||'전체';
@@ -1786,6 +1907,8 @@ function selectMonth(id, m) {
 function updateMonthLabel(id) {
   $(id+'-month-label').textContent=`${planYear}년 ${planMonth}월`;
 }
+function planMonthPrev(){ planMonth--; if(planMonth<1){planMonth=12;planYear--;} renderPlan(); }
+function planMonthNext(){ planMonth++; if(planMonth>12){planMonth=1;planYear++;} renderPlan(); }
 document.addEventListener('click', e=>{
   if (!e.target.closest('.month-picker') && !e.target.closest('[id$="-month-btn"]'))
     document.querySelectorAll('.month-picker').forEach(p=>p.style.display='none');
@@ -1827,6 +1950,9 @@ function renderResult() {
   const ry   = typeof resultYear!=='undefined'  ? resultYear  : new Date().getFullYear();
   const rm   = typeof resultMonth!=='undefined' ? resultMonth : new Date().getMonth()+1;
   const ym   = `${ry}-${String(rm).padStart(2,'0')}`;
+  // Month 표시를 항상 현재 상태와 동기화 (작은 버튼 + 큰 헤더 표시)
+  const smallLbl=$('result-month-label'); if(smallLbl) smallLbl.textContent=`${ry}년 ${rm}월`;
+  const bigLbl=$('result-month-big'); if(bigLbl) bigLbl.textContent=`${ry}년 ${rm}월`;
   const rows = DB.filter(r=>
     (ac==='전체'||r.ac===ac) &&
     (sl==='전체'||r.simline===sl) &&
@@ -1940,7 +2066,27 @@ function getExaminerCode(r) {
 function renderExaminer() {
   const ac=$('examiner-ac')?.value||'전체';
   const type=$('examiner-type')?.value||'전체';
-  const rows=examinerDB.filter(r=>(ac==='전체'||r.ac===ac)&&(type==='전체'||r.type===type));
+  const codeF=$('examiner-code')?.value||'전체';
+  const role=$('examiner-role')?.value||'전체';
+  const status=$('examiner-status')?.value||'전체';
+  const kwEmpid=($('examiner-search-empid')?.value||'').trim().toLowerCase();
+  const kwName =($('examiner-search-name')?.value||'').trim().toLowerCase();
+  // 자격 드롭다운 옵션을 examinerDB 실제 값으로 채움
+  const roleSel=$('examiner-role');
+  if(roleSel && roleSel.dataset.filled!=='1'){
+    const roles=[...new Set(examinerDB.map(r=>r.role).filter(Boolean))].sort();
+    roleSel.innerHTML='<option value="전체">전체</option>'+roles.map(r=>`<option>${r}</option>`).join('');
+    roleSel.dataset.filled='1';
+  }
+  const rows=examinerDB.filter(r=>
+    (ac==='전체'||r.ac===ac) &&
+    (type==='전체'||r.type===type) &&
+    (codeF==='전체'||getExaminerCode(r)===codeF) &&
+    (role==='전체'||r.role===role) &&
+    (status==='전체'||r.status===status) &&
+    (!kwEmpid||(r.empid||'').toLowerCase().includes(kwEmpid)) &&
+    (!kwName ||(r.name ||'').toLowerCase().includes(kwName))
+  );
   $('examiner-tbody').innerHTML=rows.length===0
     ?`<tr><td colspan="10" class="empty-state">해당 조건의 심사관이 없습니다</td></tr>`
     :rows.map((r,i)=>{
@@ -2008,7 +2154,12 @@ function updateExaminerDatalistByContext() {
 }
 function resetExaminer() {
   $('examiner-ac').value=currentUser?.ac||'전체';
-  if($('examiner-type')) $('examiner-type').value='전체';
+  if($('examiner-type'))   $('examiner-type').value='전체';
+  if($('examiner-code'))   $('examiner-code').value='전체';
+  if($('examiner-role'))   $('examiner-role').value='전체';
+  if($('examiner-status')) $('examiner-status').value='전체';
+  if($('examiner-search-empid')) $('examiner-search-empid').value='';
+  if($('examiner-search-name'))  $('examiner-search-name').value='';
   renderExaminer();
 }
 function exportExaminerExcel() {
@@ -2022,10 +2173,16 @@ function exportExaminerExcel() {
 // ══════════════════════════════════════════════════════════════════
 // ⑫ 달력
 // ══════════════════════════════════════════════════════════════════
-let calYear=2026, calMonth=5;
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth()+1;
 
 function calPrev(){ calMonth--; if(calMonth<1){calMonth=12;calYear--;} renderCal(); }
 function calNext(){ calMonth++; if(calMonth>12){calMonth=1;calYear++;} renderCal(); }
+function resetCalFilter(){
+  $('cal-ac').value=currentUser?.ac||'전체';
+  if($('cal-simline')) $('cal-simline').value='전체';
+  if($('cal-search'))  $('cal-search').value='';
+  renderCal();
+}
 function exportCalExcel() {
   const ac=$('cal-ac')?.value||'전체';
   const ym=`${calYear}-${String(calMonth).padStart(2,'0')}`;
@@ -2224,9 +2381,10 @@ function selectResultMonth(m) {
   resultYear = mpYear['result'];
   resultMonth = m;
   $('result-month-picker').style.display='none';
-  $('result-month-label').textContent = `${resultYear}년 ${resultMonth}월`;
   renderResult();
 }
+function resultMonthPrev(){ resultMonth--; if(resultMonth<1){resultMonth=12;resultYear--;} renderResult(); }
+function resultMonthNext(){ resultMonth++; if(resultMonth>12){resultMonth=1;resultYear++;} renderResult(); }
 
 // ══════════════════════════════════════════════════════════════════
 // 심사종류 → 세부구분 동적 연동
@@ -2321,7 +2479,7 @@ renderQualm = function() {
         <td>${i+1}</td><td>${acDot(r.ac)}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td>${r.role}</td><td>${r.empid}</td><td>${r.name}</td><td>${r.qual}</td>
-        <td>${r.lastDate}</td><td>${r.qualmYm}</td><td>${r.expDate}</td>
+        <td>${r.qualmYm}</td><td>${r.lastDate}</td><td>${r.expDate}</td>
         <td><span class="badge-tag ${statusCls(r.status)}">${r.status}</span></td>
       </tr>`).join('');
 };
@@ -2991,7 +3149,10 @@ async function processCrewFiles(fileList) {
   if(!files.length) return;
   let total=0;
   for(const f of files) total += await processCrewFile(f, {silent:true});
+  // 운항승무원 현황이 최신 자격 기준이므로, 적격월 관리의 구분(자격)도 다시 계산
+  if(typeof computeQualmFromDB==='function'){ computeQualmFromDB(); renderQualm(); if(typeof saveToStorage==='function') saveToStorage(); }
   saveCrewToCloud();
+  if($('crew-qual')) $('crew-qual').dataset.filled='';
   renderCrew();
   updateCrewDatalist();
   const st=$('crew-upload-status');
@@ -3003,11 +3164,26 @@ async function processCrewFiles(fileList) {
 // (crew 초기 로드는 loadCrewFromCloud()에서 앱 시작 시 처리됨)
 
 function renderCrew() {
-  const kw  = ($('crew-search')?.value||'').trim().toLowerCase();
-  const ac  = $('crew-ac')?.value||'전체';
+  const kwEmpid = ($('crew-search-empid')?.value||'').trim().toLowerCase();
+  const kwName  = ($('crew-search-name')?.value||'').trim().toLowerCase();
+  const kwDept  = ($('crew-search-dept')?.value||'').trim().toLowerCase();
+  const kwNote  = ($('crew-search-note')?.value||'').trim().toLowerCase();
+  const ac   = $('crew-ac')?.value||'전체';
+  const qual = $('crew-qual')?.value||'전체';
+  // 자격 드롭다운 옵션을 crewDB에 실제 존재하는 값으로 채움
+  const qualSel=$('crew-qual');
+  if(qualSel && qualSel.dataset.filled!=='1'){
+    const quals=[...new Set(crewDB.map(r=>r.qual).filter(Boolean))].sort();
+    qualSel.innerHTML='<option value="전체">전체</option>'+quals.map(q=>`<option>${q}</option>`).join('');
+    qualSel.dataset.filled='1';
+  }
   const rows = crewDB.filter(r=>
     (ac==='전체'||r.ac===ac) &&
-    (!kw||((r.empid||'').toLowerCase().includes(kw)||(r.name||'').toLowerCase().includes(kw)))
+    (qual==='전체'||r.qual===qual) &&
+    (!kwEmpid||(r.empid||'').toLowerCase().includes(kwEmpid)) &&
+    (!kwName ||(r.name ||'').toLowerCase().includes(kwName)) &&
+    (!kwDept ||(r.dept ||'').toLowerCase().includes(kwDept)) &&
+    (!kwNote ||(r.note ||'').toLowerCase().includes(kwNote))
   );
   const cnt=$('crew-count'); if(cnt) cnt.textContent=`${rows.length}명`;
   $('crew-tbody').innerHTML = rows.length===0
@@ -3020,8 +3196,9 @@ function renderCrew() {
       </tr>`).join('');
 }
 function resetCrew() {
-  if($('crew-search')) $('crew-search').value='';
-  if($('crew-ac'))     $('crew-ac').value='전체';
+  ['crew-search-empid','crew-search-name','crew-search-dept','crew-search-note'].forEach(id=>{if($(id)) $(id).value='';});
+  if($('crew-ac'))   $('crew-ac').value='전체';
+  if($('crew-qual')) $('crew-qual').value='전체';
   renderCrew();
 }
 function updateCrewDatalist() {
@@ -3153,14 +3330,17 @@ function doOpenFailDrawer() {
         <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
         <td>${r.subtype||'—'}</td><td>${acDot(r.ac)}</td>
         <td>${r.qual||'—'}</td><td>${r.empid||'—'}</td><td>${r.name}</td>
-        <td>${r.date}</td><td>${r.examiner||'—'}</td>
+        <td>${r.date}</td>
+        <td>${r.flight&&r.flight!=='—'?r.flight:(r.place||'—')}</td>
+        <td>${r.examiner||'—'}</td>
       </tr>`).join('');
   const el=$('fail-drawer');
   if(el){el.style.display='flex';el.classList.add('open');}
 }
 function exportFailDrawerExcel() {
-  exportCSV(['No','SIM/LINE','심사종류','세부구분','기종','자격','사번','이름','심사일','심사관'],
-    _lastFailDrawerRows.map((r,i)=>[i+1,r.simline,r.type,r.subtype||'—',r.ac,r.qual||'—',r.empid||'—',r.name,r.date,r.examiner||'—']),
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','기종','자격','사번','이름','심사일','편명/구간','심사관'],
+    _lastFailDrawerRows.map((r,i)=>[i+1,r.simline,r.type,r.subtype||'—',r.ac,r.qual||'—',r.empid||'—',r.name,r.date,
+      (r.flight&&r.flight!=='—'?r.flight:(r.place||'—')),r.examiner||'—']),
     `불합격심사상세_${statPeriodKey||''}.csv`);
 }
 async function exportFailDrawerPDF() {
@@ -3208,7 +3388,9 @@ function saveExaminer() {
   examinerDB.push({ac,type,role,empid:g('ex-empid')||'—',name,
     sim:$('ex-sim').value==='true',line:$('ex-line').value==='true',
     period:g('ex-period')||'—',status:'활동중'});
-  closeExaminerModal(); renderExaminer();
+  closeExaminerModal();
+  if($('examiner-role')) $('examiner-role').dataset.filled='';
+  renderExaminer();
   saveExaminerToCloud();
 }
 
@@ -3226,6 +3408,10 @@ function topBarExcel() {
 // 적격월 SIM/LINE 탭
 // ══════════════════════════════════════════════════════════════════
 let qualmSL = '전체';
+// 적격월 검색 Month (기본값: 오늘 날짜 기준) — "이번 달 적격월 도달자" 확인용
+let qualmSearchYear = new Date().getFullYear(), qualmSearchMonth = new Date().getMonth()+1;
+function qualmMonthPrev(){ qualmSearchMonth--; if(qualmSearchMonth<1){qualmSearchMonth=12;qualmSearchYear--;} renderQualm(); }
+function qualmMonthNext(){ qualmSearchMonth++; if(qualmSearchMonth>12){qualmSearchMonth=1;qualmSearchYear++;} renderQualm(); }
 function setQualmSL(val) {
   qualmSL = val;
   document.querySelectorAll('.qsl-btn').forEach(b=>b.classList.toggle('active', b.textContent===val));
@@ -3251,6 +3437,9 @@ renderQualm = function() {
   const role   = $('qualm-role')?.value||'전체';
   const status = $('qualm-status')?.value||'전체';
 
+  // Month 표시 동기화 (이번 달 적격월 도달자 확인용 큰 헤더)
+  const bigLbl=$('qualm-month-big'); if(bigLbl) bigLbl.textContent=`${qualmSearchYear}년 ${qualmSearchMonth}월`;
+
   // qualmDB에 simline 필드가 없으면 디폴트 LINE 처리
   const kw = ($('qualm-search')?.value||'').trim().toLowerCase();
   const rows = qualmDB
@@ -3260,7 +3449,8 @@ renderQualm = function() {
       (role==='전체'||r.role===role) &&
       (qualmSL==='전체'||r.simline===qualmSL) &&
       (status==='전체'||r.status===status) &&
-      (!kw||((r.name||'').toLowerCase().includes(kw)||(r.empid||'').toLowerCase().includes(kw)))
+      (!kw||((r.name||'').toLowerCase().includes(kw)||(r.empid||'').toLowerCase().includes(kw))) &&
+      (r.qualmYm && isMonthDueForRow(qualmSearchMonth, parseInt(r.qualmYm.split('-')[1]), r.simline))
     );
 
   const alertCnt = qualmDB
@@ -3271,20 +3461,29 @@ renderQualm = function() {
   $('badge-qualm').style.display = alertCnt>0?'inline':'none';
   const badge=$('qualm-alert-badge');
   if(badge){
-    badge.textContent = alertCnt>0 ? alertCnt+'건 주의' : '';
-    badge.style.display = alertCnt>0?'inline':'none';
+    badge.textContent = rows.length>0 ? `${qualmSearchMonth}월 적격월 도달 ${rows.length}명` : '';
+    badge.style.display = rows.length>0?'inline':'none';
   }
 
   const rowCls = s => s==='만료됨'?'qualm-row-expired':s==='만료임박'?'qualm-row-imminent':'';
+  // 운항승무원 현황(crewDB)에 사번이 있으면 재직, 없으면 퇴사(또는 명단에서 빠짐)로 간주
+  const crewEmpidSet = new Set((typeof crewDB!=='undefined'?crewDB:[]).map(c=>c.empid).filter(Boolean));
 
   $('qualm-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="9" class="empty-state">해당 조건의 데이터가 없습니다</td></tr>`
-    : rows.map((r,i)=>`<tr class="${rowCls(r.status)}">
+    ? `<tr><td colspan="10" class="empty-state">${qualmSearchMonth}월에 적격월이 도달하는 인원이 없습니다</td></tr>`
+    : rows.map((r,i)=>{
+        const qualmDisp = (r.simline==='SIM' && r.qualmYm2) ? `${r.qualmYm} / ${r.qualmYm2}` : r.qualmYm;
+        const isActive = r.empid && crewEmpidSet.has(r.empid);
+        const empStatus = crewDB.length===0 ? '—' : (isActive ? '재직' : '퇴사');
+        const empStatusCls = empStatus==='재직'?'tag-pass':empStatus==='퇴사'?'tag-fail':'tag-pend';
+        return `<tr class="${rowCls(r.status)}">
         <td>${i+1}</td><td>${acDot(r.ac)}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td>${r.role}</td><td>${r.empid}</td><td>${r.name}</td>
-        <td>${r.lastDate}</td><td>${r.qualmYm}</td><td>${r.expDate}</td>
-      </tr>`).join('');
+        <td style="white-space:nowrap">${qualmDisp}</td><td>${r.lastDate}</td><td>${r.expDate}</td>
+        <td class="center"><span class="badge-tag ${empStatusCls}">${empStatus}</span></td>
+      </tr>`;
+      }).join('');
 };
 
 function resetQualm() {
@@ -3297,11 +3496,15 @@ function resetQualm() {
 }
 function exportQualmExcel() {
   const ac=$('qualm-ac')?.value||'전체';
+  const crewEmpidSet = new Set((typeof crewDB!=='undefined'?crewDB:[]).map(c=>c.empid).filter(Boolean));
   const rows=qualmDB
     .map(r=>({...r,simline:r.simline||'LINE'}))
     .filter(r=>ac==='전체'||r.ac===ac);
-  exportCSV(['No','기종','SIM/LINE','구분','사번','이름','최근심사일','적격월','만료일'],
-    rows.map((r,i)=>[i+1,r.ac,r.simline,r.role,r.empid,r.name,r.lastDate,r.qualmYm,r.expDate]),
+  exportCSV(['No','기종','SIM/LINE','구분','사번','이름','적격월','최근심사일','만료일','현재상태'],
+    rows.map((r,i)=>[i+1,r.ac,r.simline,r.role,r.empid,r.name,
+      (r.simline==='SIM'&&r.qualmYm2)?`${r.qualmYm} / ${r.qualmYm2}`:r.qualmYm,
+      r.lastDate,r.expDate,
+      crewDB.length===0?'—':(r.empid&&crewEmpidSet.has(r.empid)?'재직':'퇴사')]),
     `적격월_${ac}.csv`);
 }
 
@@ -3323,6 +3526,9 @@ renderPlan = function() {
   const ac = $('plan-ac')?.value||'전체';
   const sl = $('plan-simline')?.value||'전체';
   const ym = `${planYear}-${String(planMonth).padStart(2,'0')}`;
+  // Month 표시 동기화 (작은 버튼 + 큰 헤더 표시)
+  const smallLbl=$('plan-month-label'); if(smallLbl) smallLbl.textContent=`${planYear}년 ${planMonth}월`;
+  const bigLbl=$('plan-month-big'); if(bigLbl) bigLbl.textContent=`${planYear}년 ${planMonth}월`;
   const rows = DB.filter(r=>
     (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) && r.date.startsWith(ym)
   );
@@ -3416,10 +3622,20 @@ document.addEventListener('click', e=>{
 // renderCal 팝업 연동 재정의
 renderCal = function() {
   const ac=$('cal-ac')?.value||'전체';
+  const sl=$('cal-simline')?.value||'전체';
+  const kw=($('cal-search')?.value||'').trim().toLowerCase();
   $('cal-title').textContent=`${calYear}년 ${calMonth}월`;
   $('top-sub').textContent=`${calYear}년 ${calMonth}월`;
+  const bigLbl=$('cal-month-big'); if(bigLbl) bigLbl.textContent=`${calYear}년 ${calMonth}월`;
   const ym=`${calYear}-${String(calMonth).padStart(2,'0')}`;
-  const events=DB.filter(r=>(ac==='전체'||r.ac===ac)&&r.date.startsWith(ym));
+  const events=DB.filter(r=>
+    (ac==='전체'||r.ac===ac) &&
+    (sl==='전체'||r.simline===sl) &&
+    r.date.startsWith(ym) &&
+    (!kw|| [r.name,r.empid,r.examiner,r.flight,r.place,r.qual,r.type,r.subtype]
+      .some(v=>(v||'').toString().toLowerCase().includes(kw))
+    )
+  );
   const first=new Date(calYear,calMonth-1,1).getDay();
   const last=new Date(calYear,calMonth,0).getDate();
   const today=new Date();
@@ -3464,8 +3680,10 @@ renderCal = function() {
     const evHtml=groups.map(g=>{
       const e=g.base;
       const n=g.persons.length;
-      const cls=e.simline==='SIM'?'sim':e.type==='특수'?'특수':e.type==='인정'?'line-인정':'line-정기';
-      const typeLabel=e.simline==='SIM'?'SIM':e.type;
+      const cls=e.simline==='SIM'
+        ? (e.type==='특수'?'특수':e.type==='인정'?'sim-인정':'sim-정기')
+        : (e.type==='특수'?'특수':e.type==='인정'?'line-인정':'line-정기');
+      const typeLabel=e.simline==='SIM'?`SIM · ${e.type||''}`:e.type;
       const examShort=e.examiner&&e.examiner!=='—'?e.examiner.split(' ')[0]:'';
       const flight=e.simline==='LINE'&&e.flight&&e.flight!=='—'?e.flight:'';
       // 세부구분: 괄호 내 과정 대신 procs set으로 표시
