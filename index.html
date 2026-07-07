@@ -15,15 +15,14 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
-// ⚠️ 아래 config를 K3M님의 Firebase 프로젝트 콘솔(⚙️ 프로젝트 설정 > 내 앱 > 웹앱) 값으로 교체하세요.
-// 트리니티 PWA랑 같은 프로젝트를 재사용해도 되고, 데이터는 별도 컬렉션(selos_admin_*)에 저장되어 PWA 데이터와 섞이지 않습니다.
+// SELOS ADMIN 전용 Firebase 프로젝트 (selos-admin)
 const firebaseConfig = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME.firebaseapp.com",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME.appspot.com",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME"
+  apiKey: "AIzaSyDOBfVao-XEklW77ZhjEOMh5y-eHeovgfw",
+  authDomain: "selos-admin.firebaseapp.com",
+  projectId: "selos-admin",
+  storageBucket: "selos-admin.firebasestorage.app",
+  messagingSenderId: "340906393104",
+  appId: "1:340906393104:web:8f66ddaa51cba10131d495"
 };
 firebase.initializeApp(firebaseConfig);
 const cloudDB = firebase.firestore();
