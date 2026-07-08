@@ -677,7 +677,7 @@ select{font-family:inherit}
             <button class="btn btn-primary btn-sm" onclick="applyPlanFilter()"><i class="ti ti-search"></i> 조회</button>
             <button class="btn btn-outline btn-sm" onclick="resetPlanFilter()">초기화</button>
             <button class="btn btn-outline btn-sm" id="plan-bulk-delete-btn" onclick="deleteSelectedPlanRows()" style="color:var(--fail);border-color:#EDD0CC"><i class="ti ti-trash"></i> 선택삭제</button>
-            <button class="btn btn-excel btn-sm" id="plan-excel-btn"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
+            <button class="btn btn-excel btn-sm" id="plan-excel-btn" onclick="exportPlanExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
           </div>
         </div>
         <div class="big-month-nav">
@@ -1336,6 +1336,15 @@ function getProcessDisp(r) {
     if (r.dateKnow) return `지식<br><span style="font-size:9px;color:var(--muted)">${r.dateKnow}</span>`;
   }
   return r.process || '—';
+}
+// CSV 등 일반 텍스트용 (HTML 태그 없는 버전)
+function getProcessPlain(r) {
+  if (r.type==='인정') {
+    if (r.dateKnow && r.dateSkill) return `지식+기량(지식 ${r.dateKnow} / 기량 ${r.dateSkill})`;
+    if (r.dateSkill) return `기량(${r.dateSkill})`;
+    if (r.dateKnow) return `지식(${r.dateKnow})`;
+  }
+  return r.process || '';
 }
 function exportCSV(headers, rows, filename) {
   const bom = '\uFEFF';
@@ -2104,11 +2113,26 @@ function resetResult() {
   renderResult();
 }
 function exportResultExcel() {
-  const ac=$('result-ac')?.value||'전체';
-  const rows=DB.filter(r=>ac==='전체'||r.ac===ac);
-  exportCSV(['No','SIM/LINE','심사종류','세부구분','기종','자격','사번','이름','심사일','편명','심사관','결과'],
-    rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,r.result||'미입력']),
-    `심사결과_${ac}.csv`);
+  const ac   = $('result-ac')?.value||'전체';
+  const sl   = $('result-simline')?.value||'전체';
+  const type = $('result-type')?.value||'ALL';
+  const ry   = typeof resultYear!=='undefined'  ? resultYear  : new Date().getFullYear();
+  const rm   = typeof resultMonth!=='undefined' ? resultMonth : new Date().getMonth()+1;
+  const ym   = `${ry}-${String(rm).padStart(2,'0')}`;
+  let rows = DB.filter(r=>
+    (ac==='전체'||r.ac===ac) &&
+    (sl==='전체'||r.simline===sl) &&
+    (type==='ALL'||r.type===type) &&
+    r.date.startsWith(ym)
+  );
+  rows = [...rows].sort((a,b)=>{
+    const va=(a[resultSortCol]??'').toString(), vb=(b[resultSortCol]??'').toString();
+    const cmp = va.localeCompare(vb, 'ko');
+    return resultSortDir==='asc' ? cmp : -cmp;
+  });
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','기종','자격','사번','이름','심사일','편명/구간','심사관','과정','결과','비고','SET'],
+    rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,getProcessPlain(r),r.result||'미입력',r.note||'',r.setId?'SET':'']),
+    `심사결과_${ry}년${rm}월_${ac}.csv`);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -3176,36 +3200,31 @@ function exportPlanDetailCSV(id){
 
 // ── 심사계획 전체 엑셀 (HTML 리포트) ──
 exportPlanExcel = function(){
-  const ac=$('plan-ac')?.value||'전체',sl=$('plan-simline')?.value||'전체';
-  const ym=`${planYear}-${String(planMonth).padStart(2,'0')}`;
-  const rows=DB.filter(r=>(ac==='전체'||r.ac===ac)&&(sl==='전체'||r.simline===sl)&&r.date.startsWith(ym));
-  const setColors={};let si=0;
-  rows.forEach(r=>{if(r.setId&&!(r.setId in setColors))setColors[r.setId]=si++%2;});
-  const trs=rows.map((r,i)=>{
-    const bg=r.setId?(setColors[r.setId]===0?'#F0F5FF':'#F5F0FF'):'#fff';
-    const sb=r.setId?'<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#5B7FA6;color:#fff;font-size:7px;font-weight:800;text-align:center;line-height:14px;margin-right:3px">S</span>':'';
-    const res=r.result==='합격'?'color:#3A6B3A;font-weight:700':r.result==='불합격'?'color:#8B3A3A;font-weight:700':'color:#9A8A7E';
-    return `<tr style="background:${bg}"><td>${i+1}</td>
-      <td><b style="color:${r.simline==='SIM'?'#8A6B3A':'#5B7FA6'}">${r.simline}</b></td>
-      <td>${r.type}</td><td>${r.subtype}</td><td>${r.ac}</td><td>${r.qual}</td>
-      <td>${r.empid}</td><td>${sb}${r.name}</td><td>${r.date}</td><td>${r.flight}</td>
-      <td><b>${r.examiner}</b></td><td>${r.place}</td>
-      <td style="${res}">${r.result||'—'}</td><td>${r.note||''}</td></tr>`;
-  }).join('');
-  const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>심사계획 ${planYear}년 ${planMonth}월</title>
-<style>*{box-sizing:border-box;margin:0;padding:0;font-family:'맑은 고딕',sans-serif}body{background:#F5F2EE;padding:24px;font-size:12px;color:#2C2A27}
-h1{font-size:16px;font-weight:800;color:#2E2B27;margin-bottom:4px}.meta{font-size:10px;color:#9A8A7E;margin-bottom:18px}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-th{background:#2E2B27;color:#fff;padding:8px 10px;font-size:10px;text-align:left;font-weight:700}
-td{padding:7px 10px;border-bottom:1px solid #E2DAD3;vertical-align:middle;font-size:11.5px}
-tr:last-child td{border-bottom:none}</style></head><body>
-<h1>심사계획 — ${planYear}년 ${planMonth}월</h1>
-<div class="meta">기종: ${ac} · SIM/LINE: ${sl} · 생성: ${new Date().toLocaleString('ko-KR')} · <b>S</b> = SET 심사(기장+부기장 동반)</div>
-<table><thead><tr><th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>기종</th><th>자격</th><th>사번</th><th>이름</th><th>심사일</th><th>편명/구간</th><th>심사관</th><th>심사장소</th><th>결과</th><th>비고</th></tr></thead>
-<tbody>${trs}</tbody></table></body></html>`;
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:`심사계획_${planYear}년${planMonth}월_${ac}.html`});
-  a.click();URL.revokeObjectURL(a.href);
+  // 현재 화면에 보이는 필터/정렬 상태와 동일한 데이터를 CSV로 내보냄
+  const ac = $('plan-ac')?.value||'전체';
+  const sl = $('plan-simline')?.value||'전체';
+  const type = $('plan-type')?.value||'전체';
+  const qual = $('plan-qual')?.value||'전체';
+  const kwEmpid = ($('plan-search-empid')?.value||'').trim().toLowerCase();
+  const kwName = ($('plan-search-name')?.value||'').trim().toLowerCase();
+  const kwExaminer = ($('plan-search-examiner')?.value||'').trim().toLowerCase();
+  const ym = `${planYear}-${String(planMonth).padStart(2,'0')}`;
+  let rows = DB.filter(r=>
+    (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) &&
+    (type==='전체'||r.type===type) && (qual==='전체'||r.qual===qual) &&
+    (!kwEmpid||(r.empid||'').toLowerCase().includes(kwEmpid)) &&
+    (!kwName||(r.name||'').toLowerCase().includes(kwName)) &&
+    (!kwExaminer||(r.examiner||'').toLowerCase().includes(kwExaminer)) &&
+    r.date.startsWith(ym)
+  );
+  rows = [...rows].sort((a,b)=>{
+    const va=(a[planSortCol]??'').toString(), vb=(b[planSortCol]??'').toString();
+    const cmp = va.localeCompare(vb, 'ko');
+    return planSortDir==='asc' ? cmp : -cmp;
+  });
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','과정','기종','자격','사번','이름','심사일정','편명/구간','심사관','심사장소','비고','SET'],
+    rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,getProcessPlain(r),r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,r.place,r.note||'',r.setId?'SET':'']),
+    `심사계획_${planYear}년${planMonth}월_${ac}.csv`);
 };
 
 // ── 달력 팝업 재정의 - 심사관 + SET 동반자 추가 ──
