@@ -41,6 +41,9 @@ const CLOUD_COLLECTION = 'selos_admin_data'; // 문서: db, qualm, crew, examine
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+/* 확대는 사이드바를 제외한 우측 콘텐츠 영역(.main-content)에만 적용 — 사이드바는 아예 손대지 않아 원래 크기/레이아웃 그대로 유지됨 */
+.main-content{zoom:1.15}
+#page-stat{zoom:0.8696} /* 통계 페이지는 기존 크기 유지 — 차트 4개가 스크롤 없이 한 화면에 보이도록 */
 
 /* ── 프로필 화면 ── */
 #prof-screen{
@@ -283,7 +286,14 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 .cal-ev-name{font-weight:700;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal-ev-meta{font-size:9px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .cal-ev-examiner{font-size:9px;font-weight:600;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.cal-popup{
+  position:absolute; z-index:60; left:4px; right:4px;
+  background:#fff; border:1px solid var(--border2); border-radius:9px;
+  box-shadow:0 10px 28px rgba(0,0,0,.16); padding:10px 12px;
+}
+.cal-popup-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle;flex-shrink:0}
 .cal-set-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#5B7FA6;vertical-align:middle;margin-right:3px}
+
 
 /* ── 심사기록부 ── */
 .rec-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
@@ -806,6 +816,7 @@ select{font-family:inherit}
               <th class="sortable" ondblclick="toggleResultSort('date')">심사일</th>
               <th>편명/구간</th>
               <th class="sortable" ondblclick="toggleResultSort('examiner')">심사관</th>
+              <th>과정</th>
               <th class="center">결과</th><th class="center">수정</th><th>비고</th>
             </tr></thead>
             <tbody id="result-tbody"></tbody>
@@ -865,7 +876,7 @@ select{font-family:inherit}
             <thead><tr>
               <th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>기종</th>
               <th>자격</th><th>사번</th><th>이름</th><th>심사일</th><th>편명/구간</th>
-              <th>심사관</th><th>심사장소</th><th class="center">결과</th><th>비고</th>
+              <th>심사관</th><th>심사장소</th><th>과정</th><th class="center">결과</th><th>비고</th>
             </tr></thead>
             <tbody id="record-tbody"></tbody>
           </table>
@@ -934,6 +945,24 @@ select{font-family:inherit}
 
       <!-- ─── 심사관 관리 ─── -->
       <div class="page-section" id="page-examiner">
+        <div class="upload-zone" style="padding:16px;margin-bottom:10px"
+          onclick="document.getElementById('examiner-file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="event.preventDefault();this.classList.remove('drag');processExaminerFiles(event.dataTransfer.files)">
+          <i class="ti ti-user-check" style="font-size:20px;display:block;margin-bottom:4px"></i>
+          <div style="font-weight:700;font-size:11px">위촉심사관 현황 엑셀 업로드 (기종별 파일 여러 개 한번에 선택 가능)</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">"인원현황조회-직책-A/C위촉심사관" · "SIM위촉심사관" 형식(사번/이름/직책/시작일/종료일) 지원 · 직책에서 기종·LINE/SIM을 자동 인식하고, 같은 사람이 둘 다 있으면 겸임으로 합쳐져요</div>
+        </div>
+        <input type="file" id="examiner-file-input" accept=".xlsx,.xls,.csv" multiple style="display:none"
+          onchange="processExaminerFiles(this.files);this.value=''">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div id="examiner-upload-status" style="font-size:11px;color:var(--green);display:none;flex:1"></div>
+          <button class="btn btn-outline btn-sm" onclick="resetInhouseExaminers()" style="color:var(--fail);border-color:#EDD0CC">
+            <i class="ti ti-refresh" style="font-size:12px"></i> 사내 위촉심사관 명단 초기화
+          </button>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin:-4px 0 10px">⚠ 예전에 잘못 저장된(가짜) 데이터가 섞여있다면, 초기화로 사내 위촉심사관 항목만 싹 비운 뒤 갖고 계신 엑셀 파일을 한 번에 다시 업로드해주세요. CAE·국토교통부 심사관 데이터는 초기화 대상이 아니에요.</div>
         <div class="filter-bar">
           <div class="filter-item"><span class="filter-label">기종</span>
             <select class="filter-select" id="examiner-ac" onchange="renderExaminer()"></select>
@@ -946,12 +975,13 @@ select{font-family:inherit}
               <option>국토교통부 심사관</option>
             </select>
           </div>
-          <div class="filter-item"><span class="filter-label">코드</span>
+          <div class="filter-item"><span class="filter-label" title="DLCP = Designated Line Check Pilot(LINE 위촉심사관) · DSCP = Designated Sim Check Pilot(SIM 위촉심사관) · CHK = 국토교통부 심사관" style="cursor:help;border-bottom:1px dotted var(--muted)">코드</span>
             <select class="filter-select" id="examiner-code" onchange="renderExaminer()">
               <option value="전체">전체</option>
               <option value="DLCP">DLCP</option>
               <option value="DSCP">DSCP</option>
               <option value="DLCP/DSCP">DLCP/DSCP</option>
+              <option value="CHK">CHK</option>
             </select>
           </div>
           <div class="filter-item"><span class="filter-label">자격</span>
@@ -981,7 +1011,7 @@ select{font-family:inherit}
           <table class="tbl">
             <thead><tr>
               <th>No</th><th>기종</th><th>구분</th><th>코드</th><th>자격</th><th>사번</th><th>이름</th>
-              <th>위촉기간</th><th>상태수정</th><th class="center">상태</th><th class="center">삭제</th>
+              <th>위촉기간</th><th>상태수정</th><th class="center">상태</th><th class="center">수정</th><th class="center">삭제</th>
             </tr></thead>
             <tbody id="examiner-tbody"></tbody>
           </table>
@@ -1228,85 +1258,66 @@ const qualmDB = [];
 
 // 심사관 데이터 (심사기록부_통합 기반 — LINE/SIM 횟수 + 소속)
 const examinerDB = [
-  // ── 사내 위촉심사관 (LINE) ──
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180451',name:'김연욱',  sim:false,line:true, period:'2023-02-14~2027-02-13',status:'활동중',lineCnt:255,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김동영',  sim:false,line:true, period:'',status:'활동중',lineCnt:252,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이진수',  sim:false,line:true, period:'',status:'활동중',lineCnt:246,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190046',name:'조중민',  sim:false,line:true, period:'2023-06-22~2027-06-21',status:'활동중',lineCnt:239,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'문승규',  sim:false,line:true, period:'',status:'활동중',lineCnt:199,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150204',name:'박세종',  sim:false,line:true, period:'2023-11-03~2026-11-02',status:'활동중',lineCnt:194,simCnt:1},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이원석',  sim:false,line:true, period:'',status:'활동중',lineCnt:179,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180025',name:'신건우',  sim:false,line:true, period:'2024-03-11~2027-03-10',status:'활동중',lineCnt:174,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'안광명',  sim:false,line:true, period:'',status:'활동중',lineCnt:170,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이수준',  sim:false,line:true, period:'',status:'활동중',lineCnt:152,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150205',name:'박수호',  sim:false,line:true, period:'2024-03-27~2027-03-26',status:'활동중',lineCnt:148,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150283',name:'정정욱',  sim:false,line:true, period:'2024-06-17~2027-06-16',status:'활동중',lineCnt:143,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'강태구',  sim:false,line:true, period:'',status:'활동중',lineCnt:121,simCnt:2},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180341',name:'홍철의',  sim:false,line:true, period:'2024-06-11~2027-06-10',status:'활동중',lineCnt:123,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T140136',name:'지현식',  sim:false,line:true, period:'2024-06-21~2027-06-20',status:'활동중',lineCnt:111,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T160380',name:'김동욱',  sim:false,line:true, period:'2024-06-11~2027-06-10',status:'활동중',lineCnt:108,simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'고영균',  sim:false,line:true, period:'',status:'활동중',lineCnt:106,simCnt:1},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'최명순',  sim:false,line:true, period:'',status:'활동중',lineCnt:96, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'정연태',  sim:false,line:true, period:'',status:'활동중',lineCnt:86, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220100',name:'심수철',  sim:false,line:true, period:'2025-04-25~2028-04-24',status:'활동중',lineCnt:53, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180024',name:'송호석',  sim:false,line:true, period:'2025-06-04~2028-06-03',status:'활동중',lineCnt:50, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180342',name:'김재진',  sim:false,line:true, period:'2025-06-02~2028-06-01',status:'활동중',lineCnt:49, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220068',name:'김재호',  sim:false,line:true, period:'2025-06-05~2028-06-04',status:'활동중',lineCnt:47, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'김치혁',  sim:false,line:true, period:'',status:'활동중',lineCnt:43, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220188',name:'이용휘',  sim:false,line:true, period:'2025-05-28~2028-05-27',status:'활동중',lineCnt:40, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220106',name:'임동균',  sim:false,line:true, period:'2025-06-27~2028-06-26',status:'활동중',lineCnt:35, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220104',name:'김종욱',  sim:false,line:true, period:'2025-06-23~2028-06-22',status:'활동중',lineCnt:29, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'황태인',  sim:false,line:true, period:'',status:'활동중',lineCnt:26, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190172',name:'정민철',  sim:false,line:true, period:'2025-04-11~2028-04-10',status:'활동중',lineCnt:26, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220063',name:'박기완',  sim:false,line:true, period:'2025-04-11~2028-04-10',status:'활동중',lineCnt:23, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190045',name:'최동열',  sim:false,line:true, period:'2026-01-23~2029-01-22',status:'활동중',lineCnt:12, simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'백흠주',  sim:false,line:true, period:'',status:'활동중',lineCnt:4,  simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150195',name:'김영현',  sim:false,line:true, period:'2025-10-24~2028-10-23',status:'활동중',lineCnt:3,  simCnt:0},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'최영문',  sim:false,line:true, period:'',status:'활동중',lineCnt:1,  simCnt:0},
-  // ── 사내 위촉심사관 (SIM) ──
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220041',name:'김경환',  sim:true, line:false,period:'2024-03-13~2027-03-12',status:'활동중',lineCnt:0,  simCnt:229},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T160147',name:'김웅',    sim:true, line:false,period:'2026-04-13~2029-04-12',status:'활동중',lineCnt:0,  simCnt:228},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'황재선',  sim:true, line:true, period:'',status:'활동중',lineCnt:2,  simCnt:224},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T170037',name:'조재하',  sim:true, line:false,period:'2024-05-01~2027-04-30',status:'활동중',lineCnt:0,  simCnt:132},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T110043',name:'장세하',  sim:true, line:false,period:'2025-08-11~2026-08-10',status:'활동중',lineCnt:0,  simCnt:128},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'류강원',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:121},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240217',name:'이희복',  sim:true, line:false,period:'2024-10-25~2027-10-24',status:'활동중',lineCnt:0,  simCnt:108},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240216',name:'윤진',    sim:true, line:false,period:'2024-10-25~2027-10-24',status:'활동중',lineCnt:0,  simCnt:107},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'하승홍',  sim:true, line:true, period:'',status:'활동중',lineCnt:2,  simCnt:100},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'오승진',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:86},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'이갑규',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:83},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190089',name:'장경식',  sim:true, line:false,period:'2024-09-17~2027-09-16',status:'활동중',lineCnt:0,  simCnt:74},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'부장윤',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:65},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240434',name:'박원',    sim:true, line:false,period:'2025-06-17~2028-06-16',status:'활동중',lineCnt:0,  simCnt:60},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240433',name:'우광하',  sim:true, line:false,period:'2025-06-17~2028-06-16',status:'활동중',lineCnt:0,  simCnt:56},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'정호성',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:53},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'길호진',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:36},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T230110',name:'김민수',  sim:true, line:false,period:'2024-09-17~2027-09-16',status:'활동중',lineCnt:0,  simCnt:25},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220101',name:'장기상',  sim:true, line:false,period:'2025-04-04~2028-04-03',status:'활동중',lineCnt:0,  simCnt:18},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'',name:'곽기훈',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:13},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220107',name:'임원재',  sim:true, line:false,period:'2025-04-03~2028-04-02',status:'활동중',lineCnt:0,  simCnt:6},
-  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T220062',name:'정경진',  sim:true, line:false,period:'2025-04-03~2028-04-02',status:'활동중',lineCnt:0,  simCnt:5},
+  // ── 사내 위촉심사관 (A/C+SIM위촉심사관, 2026-07-08 기준 실제 업로드 데이터) ──
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150204',name:'박세종', sim:false,line:true, period:'2023-11-03~2026-11-02',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T150205',name:'박수호', sim:false,line:true, period:'2024-03-27~2027-03-26',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T160380',name:'김동욱', sim:false,line:true, period:'2024-06-11~2027-06-10',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T180341',name:'홍철의', sim:false,line:true, period:'2024-06-11~2027-06-10',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190045',name:'최동열', sim:false,line:true, period:'2026-01-23~2029-01-22',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T190046',name:'조중민', sim:false,line:true, period:'2023-06-22~2027-06-21',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T140136',name:'지현식', sim:false,line:true, period:'2024-06-21~2027-06-20',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T150195',name:'김영현', sim:false,line:true, period:'2025-10-24~2028-10-23',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T150283',name:'정정욱', sim:false,line:true, period:'2024-06-17~2027-06-16',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T180024',name:'송호석', sim:false,line:true, period:'2025-06-04~2028-06-03',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T180025',name:'신건우', sim:false,line:true, period:'2024-03-11~2027-03-10',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T180451',name:'김연욱', sim:false,line:true, period:'2023-02-14~2027-02-13',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T190172',name:'정민철', sim:false,line:true, period:'2025-04-11~2028-04-10',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220063',name:'박기완', sim:false,line:true, period:'2025-04-11~2028-04-10',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220068',name:'김재호', sim:false,line:true, period:'2025-06-05~2028-06-04',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220100',name:'심수철', sim:false,line:true, period:'2025-04-25~2028-04-24',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220104',name:'김종욱', sim:false,line:true, period:'2025-06-23~2028-06-22',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220106',name:'임동균', sim:false,line:true, period:'2025-06-27~2028-06-26',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220188',name:'이용휘', sim:false,line:true, period:'2025-05-28~2028-05-27',status:'활동중'},
+  {ac:'B777',type:'사내 위촉심사관',role:'기장',empid:'K2579889',name:'이해설', sim:false,line:true, period:'2025-12-03~2028-12-02',status:'활동중'},
+  {ac:'B777',type:'사내 위촉심사관',role:'기장',empid:'K2583783',name:'선종록', sim:false,line:true, period:'2026-01-19~2029-01-18',status:'활동중'},
+  {ac:'B777',type:'사내 위촉심사관',role:'기장',empid:'K9703864',name:'이민규', sim:false,line:true, period:'2025-12-03~2028-12-02',status:'활동중'},
+  {ac:'B777',type:'사내 위촉심사관',role:'기장',empid:'K9800092',name:'백승관', sim:false,line:true, period:'2026-01-19~2029-01-18',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T160147',name:'김웅', sim:true,line:false, period:'2026-04-13~2029-04-12',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T170037',name:'조재하', sim:true,line:false, period:'2024-05-01~2027-04-30',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240216',name:'윤진', sim:true,line:false, period:'2024-10-25~2027-10-24',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240217',name:'이희복', sim:true,line:false, period:'2024-10-25~2027-10-24',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240433',name:'우광하', sim:true,line:false, period:'2025-06-17~2028-06-16',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240434',name:'박원', sim:true,line:false, period:'2025-06-17~2028-06-16',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T240703',name:'조남윤', sim:true,line:false, period:'2026-06-15~2029-06-14',status:'활동중'},
+  {ac:'A330',type:'사내 위촉심사관',role:'기장',empid:'T250295',name:'김형천', sim:true,line:false, period:'2026-06-15~2029-06-14',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T110043',name:'장세하', sim:true,line:false, period:'2025-08-11~2026-08-10',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T190089',name:'장경식', sim:true,line:false, period:'2024-09-17~2027-09-16',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220041',name:'김경환', sim:true,line:false, period:'2024-03-13~2027-03-12',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220062',name:'정경진', sim:true,line:false, period:'2025-04-03~2028-04-02',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220101',name:'장기상', sim:true,line:false, period:'2025-04-04~2028-04-03',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T220107',name:'임원재', sim:true,line:false, period:'2025-04-03~2028-04-02',status:'활동중'},
+  {ac:'B737',type:'사내 위촉심사관',role:'기장',empid:'T230110',name:'김민수', sim:true,line:false, period:'2024-09-17~2027-09-16',status:'활동중'},
   // ── CAE 소속 SIM 심사관 ──
-  {ac:'A330',type:'CAE 심사관',     role:'기장',empid:'',name:'민경장',  sim:true, line:true, period:'',status:'활동중',lineCnt:1,  simCnt:138},
-  {ac:'A330',type:'CAE 심사관',     role:'기장',empid:'',name:'민경식',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:38},
-  {ac:'A330',type:'CAE 심사관',     role:'기장',empid:'',name:'최국진',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:32},
-  {ac:'A330',type:'CAE 심사관',     role:'기장',empid:'',name:'김홍연',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:16},
+  {ac:'A330',type:'CAE 심사관',     role:'',empid:'',name:'민경장',  sim:true, line:true, period:'',status:'활동중',lineCnt:1,  simCnt:138},
+  {ac:'A330',type:'CAE 심사관',     role:'',empid:'',name:'민경식',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:38},
+  {ac:'A330',type:'CAE 심사관',     role:'',empid:'',name:'최국진',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:32},
+  {ac:'A330',type:'CAE 심사관',     role:'',empid:'',name:'김홍연',  sim:true, line:false,period:'',status:'활동중',lineCnt:0,  simCnt:16},
   // ── 국토교통부 심사관 ──
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'박봉서',  sim:true, line:true, period:'',status:'활동중',lineCnt:175,simCnt:23},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'유순상',  sim:true, line:true, period:'',status:'활동중',lineCnt:95, simCnt:17},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'한희성',  sim:true, line:true, period:'',status:'활동중',lineCnt:60, simCnt:2},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'윤동섭',  sim:true, line:true, period:'',status:'활동중',lineCnt:57, simCnt:4},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'배병홍',  sim:true, line:true, period:'',status:'활동중',lineCnt:41, simCnt:2},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'김기양',  sim:true, line:true, period:'',status:'활동중',lineCnt:5,  simCnt:5},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'서세규',  sim:true, line:true, period:'',status:'활동중',lineCnt:7,  simCnt:2},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'김문배',  sim:true, line:true, period:'',status:'활동중',lineCnt:6,  simCnt:2},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'이치원',  sim:false,line:true, period:'',status:'활동중',lineCnt:8,  simCnt:0},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'박충근',  sim:false,line:true, period:'',status:'활동중',lineCnt:5,  simCnt:0},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'정종철',  sim:true, line:true, period:'',status:'활동중',lineCnt:1,  simCnt:1},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'박형득',  sim:false,line:true, period:'',status:'활동중',lineCnt:2,  simCnt:0},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'박래백',  sim:false,line:true, period:'',status:'활동중',lineCnt:2,  simCnt:0},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'권택열',  sim:false,line:true, period:'',status:'활동중',lineCnt:1,  simCnt:0},
-  {ac:'A330',type:'국토교통부 심사관',role:'기장',empid:'',name:'서병권',  sim:false,line:true, period:'',status:'활동중',lineCnt:1,  simCnt:0},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'박봉서',  sim:true, line:true, period:'',status:'활동중',lineCnt:175,simCnt:23},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'유순상',  sim:true, line:true, period:'',status:'활동중',lineCnt:95, simCnt:17},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'한희성',  sim:true, line:true, period:'',status:'활동중',lineCnt:60, simCnt:2},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'윤동섭',  sim:true, line:true, period:'',status:'활동중',lineCnt:57, simCnt:4},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'배병홍',  sim:true, line:true, period:'',status:'활동중',lineCnt:41, simCnt:2},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'김기양',  sim:true, line:true, period:'',status:'활동중',lineCnt:5,  simCnt:5},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'서세규',  sim:true, line:true, period:'',status:'활동중',lineCnt:7,  simCnt:2},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'김문배',  sim:true, line:true, period:'',status:'활동중',lineCnt:6,  simCnt:2},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'이치원',  sim:false,line:true, period:'',status:'활동중',lineCnt:8,  simCnt:0},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'박충근',  sim:false,line:true, period:'',status:'활동중',lineCnt:5,  simCnt:0},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'정종철',  sim:true, line:true, period:'',status:'활동중',lineCnt:1,  simCnt:1},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'박형득',  sim:false,line:true, period:'',status:'활동중',lineCnt:2,  simCnt:0},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'박래백',  sim:false,line:true, period:'',status:'활동중',lineCnt:2,  simCnt:0},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'권택열',  sim:false,line:true, period:'',status:'활동중',lineCnt:1,  simCnt:0},
+  {ac:'A330',type:'국토교통부 심사관',role:'',empid:'',name:'서병권',  sim:false,line:true, period:'',status:'활동중',lineCnt:1,  simCnt:0},
 ];
 
 // ══════════════════════════════════════════════════════════════════
@@ -1317,6 +1328,15 @@ const acDot = ac => {
   const cls = ac==='A330'?'a330':ac==='B737'?'b737':'b777';
   return `<span class="ac-dot dot-${cls}"></span>${ac}`;
 };
+// 과정(지식/기량/지식+기량) 표시 — 심사계획/심사결과/심사기록부 공통
+function getProcessDisp(r) {
+  if (r.type==='인정') {
+    if (r.dateKnow && r.dateSkill) return `지식+기량<br><span style="font-size:9px;color:var(--muted)">지식 ${r.dateKnow}<br>기량 ${r.dateSkill}</span>`;
+    if (r.dateSkill) return `기량<br><span style="font-size:9px;color:var(--muted)">${r.dateSkill}</span>`;
+    if (r.dateKnow) return `지식<br><span style="font-size:9px;color:var(--muted)">${r.dateKnow}</span>`;
+  }
+  return r.process || '—';
+}
 function exportCSV(headers, rows, filename) {
   const bom = '\uFEFF';
   const csv = [headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -2037,7 +2057,7 @@ function renderResult() {
   const badge=$('result-pending-badge');
   if(badge){badge.textContent=pending>0?pending+'건 미입력':'';badge.style.display=pending>0?'inline':'none';}
   $('result-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="14" class="empty-state">해당 조건의 데이터가 없습니다 (${ry}년 ${rm}월)</td></tr>`
+    ? `<tr><td colspan="15" class="empty-state">해당 조건의 데이터가 없습니다 (${ry}년 ${rm}월)</td></tr>`
     : rows.map((r,i)=>{
         const resCls=r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
         const tc=r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정';
@@ -2050,6 +2070,7 @@ function renderResult() {
           <td>${r.empid||'—'}</td><td>${setBadge}${r.name}</td><td>${r.date}</td>
           <td>${r.flight&&r.flight!=='—'?r.flight:r.place||'—'}</td>
           <td><b>${r.examiner||'—'}</b></td>
+          <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
           <td class="center"><span class="badge-tag ${resCls}">${r.result||'미입력'}</span></td>
           <td class="center">
             <select class="filter-select" style="font-size:10px;padding:1px 2px;width:68px;border-radius:4px"
@@ -2134,11 +2155,24 @@ function exportRecordExcel() {
 // ⑪ 심사관 관리
 // ══════════════════════════════════════════════════════════════════
 function getExaminerCode(r) {
+  // DLCP/DSCP는 "자사 위촉심사관"에게만 해당
+  // 국토교통부 심사관(CHK), CAE 심사관(외주업체 소속, 위촉 대상 아님)은 코드 미적용
+  if (r.type==='국토교통부 심사관') return 'CHK';
+  if (r.type==='CAE 심사관') return '—';
   // LINE 전용 → DLCP, SIM 전용 → DSCP, 겸임 → DLCP/DSCP
   if(r.line && r.sim) return 'DLCP/DSCP';
   if(r.line) return 'DLCP';
   if(r.sim)  return 'DSCP';
   return '—';
+}
+// 위촉기간 시작일/종료일을 날짜피커로 개별 수정 (둘 중 바뀐 값만 전달, 나머지는 null)
+function updateExaminerPeriod(idx, startVal, endVal) {
+  const row = examinerDB[idx]; if(!row) return;
+  let [s,e] = (row.period||'').split('~').map(x=>(x||'').trim());
+  if (startVal!==null) s = startVal;
+  if (endVal!==null)   e = endVal;
+  row.period = (s||e) ? `${s||''}~${e||''}` : '';
+  saveExaminerToCloud();
 }
 
 function renderExaminer() {
@@ -2149,6 +2183,15 @@ function renderExaminer() {
   const status=$('examiner-status')?.value||'전체';
   const kwEmpid=($('examiner-search-empid')?.value||'').trim().toLowerCase();
   const kwName =($('examiner-search-name')?.value||'').trim().toLowerCase();
+  // 운항승무원 현황(crewDB) 기준으로 자격(기장/부기장 등)을 동적으로 반영
+  // - 사내 위촉심사관: crewDB에서 사번으로 조회한 현재 자격 사용 (crewDB에 없으면 원래 값 유지)
+  // - CAE/국토교통부 심사관: 자사 소속이 아니므로 항상 공란
+  const crewQualMap = {};
+  (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewQualMap[c.empid]=c.qual; });
+  examinerDB.forEach(r=>{
+    if (r.type==='CAE 심사관' || r.type==='국토교통부 심사관') { r.role=''; }
+    else if (r.empid && crewQualMap[r.empid]) { r.role = crewQualMap[r.empid]; }
+  });
   // 자격 드롭다운 옵션을 examinerDB 실제 값으로 채움
   const roleSel=$('examiner-role');
   if(roleSel && roleSel.dataset.filled!=='1'){
@@ -2166,23 +2209,29 @@ function renderExaminer() {
     (!kwName ||(r.name ||'').toLowerCase().includes(kwName))
   );
   $('examiner-tbody').innerHTML=rows.length===0
-    ?`<tr><td colspan="10" class="empty-state">해당 조건의 심사관이 없습니다</td></tr>`
+    ?`<tr><td colspan="11" class="empty-state">해당 조건의 심사관이 없습니다</td></tr>`
     :rows.map((r,i)=>{
       const typeCls=r.type==='국토교통부 심사관'?'tag-정기':r.type==='CAE 심사관'?'tag-sim':'tag-line';
       const code=getExaminerCode(r);
-      const codeCls=r.line&&r.sim?'tag-인정':r.line?'tag-line':'tag-sim';
+      const codeCls = code==='—' ? 'tag-pend' : (r.line&&r.sim?'tag-인정':r.line?'tag-line':'tag-sim');
       const statusCls=r.status==='활동중'?'tag-pass':'tag-fail';
       const idx=examinerDB.indexOf(r);
+      const [pStart,pEnd] = (r.period||'').split('~').map(s=>(s||'').trim());
       return `<tr>
         <td>${i+1}</td><td>${acDot(r.ac)}</td>
         <td><span class="badge-tag ${typeCls}" style="font-size:9px">${r.type}</span></td>
-        <td><span class="badge-tag ${codeCls}" style="font-size:9px">${code}</span></td>
-        <td>${r.role}</td>
+        <td><span class="badge-tag ${codeCls}" style="font-size:9px" title="${code==='DLCP'?'Designated Line Check Pilot':code==='DSCP'?'Designated Sim Check Pilot':code==='DLCP/DSCP'?'Designated Line/Sim Check Pilot (겸임)':code==='CHK'?'국토교통부 심사관':''}">${code}</span></td>
+        <td>${r.role||'—'}</td>
         <td>${r.empid||'—'}</td>
         <td style="font-weight:600">${r.name}</td>
         <td>
-          <input class="filter-input" value="${r.period||''}" style="width:130px;font-size:11px"
-            onchange="examinerDB[${idx}].period=this.value;saveExaminerToCloud()">
+          <div style="display:flex;align-items:center;gap:3px">
+            <input type="date" class="filter-input" value="${pStart||''}" style="width:120px;font-size:10px;padding:3px 4px"
+              onchange="updateExaminerPeriod(${idx},this.value,null)">
+            <span style="color:var(--muted);font-size:10px">~</span>
+            <input type="date" class="filter-input" value="${pEnd||''}" style="width:120px;font-size:10px;padding:3px 4px"
+              onchange="updateExaminerPeriod(${idx},null,this.value)">
+          </div>
         </td>
         <td>
           <select class="filter-select" style="font-size:11px" onchange="examinerDB[${idx}].status=this.value;renderExaminer();saveExaminerToCloud()">
@@ -2192,6 +2241,10 @@ function renderExaminer() {
           </select>
         </td>
         <td class="center"><span class="badge-tag ${statusCls}">${r.status}</span></td>
+        <td class="center">
+          <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 8px"
+            onclick="editExaminerRow(${idx})"><i class="ti ti-edit" style="font-size:12px"></i></button>
+        </td>
         <td class="center">
           <button class="btn btn-sm" style="background:#FEF0EE;color:var(--fail);border:1px solid #EDD0CC;padding:2px 8px"
             onclick="deleteExaminer(${idx})"><i class="ti ti-trash" style="font-size:12px"></i></button>
@@ -2458,9 +2511,13 @@ function setupRealtimeSync() {
 }
 
 // 앱 시작 시 클라우드 데이터 로드 + 실시간 동기화 시작
-loadFromStorage().then(()=>{
-  loadCrewFromCloud();
-  loadExaminerFromCloud();
+loadFromStorage().then(async ()=>{
+  await loadCrewFromCloud();
+  await loadExaminerFromCloud();
+  if (typeof syncExpiredExaminersFromDB==='function') {
+    const added = syncExpiredExaminersFromDB();
+    if (added>0) { renderExaminer(); saveExaminerToCloud(); }
+  }
   setupRealtimeSync();
 });
 
@@ -2635,6 +2692,10 @@ function showCalGroupPopup(event, ids) {
   if(!rows.length)return;
   const e=rows[0];
   const slCls=e.simline==='SIM'?'tag-sim':'tag-line';
+  // 카드와 동일한 색상 분류 로직 (renderCal과 일치시켜야 클릭한 심사와 같은 색이 나옴)
+  const colorCls = e.simline==='SIM'
+    ? (e.type==='특수'?'특수':e.type==='인정'?'sim-인정':'sim-정기')
+    : (e.type==='특수'?'특수':e.type==='인정'?'line-인정':'line-정기');
 
   // 카드 얼굴에 이미 보이는 정보(구분, 기종, 편명, 심사관 약칭)는 빼고,
   // 팝업에서만 확인 가능한 정보(장소, 사번, 결과, 비고) 위주로 표시. 미입력 항목은 그냥 생략.
@@ -2663,21 +2724,28 @@ function showCalGroupPopup(event, ids) {
 
   const pop=document.createElement('div');
   pop.className='cal-popup';
-  pop.style.width='240px';
   pop.innerHTML=`
     <div class="cal-popup-title">
-      <span><span class="badge-tag ${slCls}" style="margin-right:4px">${e.simline}</span>${e.type}${e.subtype?' · '+e.subtype:''}</span>
+      <span style="display:flex;align-items:center"><span class="cal-popup-dot cal-ev-${colorCls}"></span><span class="badge-tag ${slCls}" style="margin-right:4px">${e.simline}</span>${e.type}${e.subtype?' · '+e.subtype:''}</span>
       <button style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px" onclick="this.closest('.cal-popup').remove()">✕</button>
     </div>
     ${placeRow}
     <div style="font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.5px;margin-bottom:2px">피심사자 (${rows.length}명)</div>
     ${personRows}
     ${noteBlock}`;
-  const cell=event.currentTarget.closest('.cal-cell');
+
+  // 클릭한 바로 그 심사 카드 바로 아래에 뜨도록 위치 계산 (여러 심사가 있어도 정확히 클릭한 것 아래에)
+  const clickedEl = event.currentTarget;
+  const cell = clickedEl.closest('.cal-cell');
   cell.appendChild(pop);
+  pop.style.top = (clickedEl.offsetTop + clickedEl.offsetHeight + 4) + 'px';
   const rect=pop.getBoundingClientRect();
   if(rect.right>window.innerWidth-10)pop.style.right='0';
-  if(rect.bottom>window.innerHeight-10){pop.style.top='auto';pop.style.bottom='0';}
+  if(rect.bottom>window.innerHeight-10){
+    // 화면 아래로 넘치면 클릭한 카드 위쪽에 뜨도록 전환
+    pop.style.top = 'auto';
+    pop.style.bottom = (cell.offsetHeight - clickedEl.offsetTop + 4) + 'px';
+  }
   activePopup=pop;
 }
 
@@ -2745,31 +2813,42 @@ openExaminerDrawer = function() {
 <div class="modal-overlay" id="examiner-modal">
   <div class="modal-box" style="width:480px">
     <div class="modal-header">
-      <span class="modal-title"><i class="ti ti-user-check" style="margin-right:6px"></i>심사관 추가</span>
+      <span class="modal-title"><i class="ti ti-user-check" id="examiner-modal-icon" style="margin-right:6px"></i><span id="examiner-modal-title-text">심사관 추가</span></span>
       <button class="modal-close" onclick="closeExaminerModal()">✕</button>
     </div>
+    <input type="hidden" id="ex-edit-idx" value="">
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group"><label class="form-label">기종</label>
           <select class="form-control" id="ex-ac"><option value="">선택</option><option>A330</option><option>B737</option><option>B777</option></select>
         </div>
         <div class="form-group"><label class="form-label">구분</label>
-          <select class="form-control" id="ex-type"><option value="">선택</option><option>사내 위촉심사관</option><option>국토부 심사관</option></select>
+          <select class="form-control" id="ex-type" onchange="updateExRoleRequirement()">
+            <option value="">선택</option>
+            <option>사내 위촉심사관</option>
+            <option>CAE 심사관</option>
+            <option>국토교통부 심사관</option>
+          </select>
         </div>
-        <div class="form-group"><label class="form-label">자격</label>
+        <div class="form-group" id="ex-role-wrap"><label class="form-label">자격</label>
           <select class="form-control" id="ex-role"><option value="">선택</option><option>기장</option><option>부기장</option></select>
         </div>
         <div class="form-group"><label class="form-label">사번</label>
-          <input class="form-control" id="ex-empid" placeholder="예) 5001"></div>
-        <div class="form-group"><label class="form-label">이름</label>
+          <input class="form-control" id="ex-empid" placeholder="예) T180451"></div>
+        <div class="form-group full"><label class="form-label">이름</label>
           <input class="form-control" id="ex-name" placeholder="심사관 이름"></div>
-        <div class="form-group"><label class="form-label">위촉기간</label>
-          <input class="form-control" id="ex-period" placeholder="예) 2025.01~2027.01"></div>
+        <div class="form-group"><label class="form-label">위촉 시작일</label>
+          <input class="form-control" id="ex-period-start" type="date"></div>
+        <div class="form-group"><label class="form-label">위촉 종료일</label>
+          <input class="form-control" id="ex-period-end" type="date"></div>
         <div class="form-group"><label class="form-label">SIM 심사</label>
           <select class="form-control" id="ex-sim"><option value="true">가능</option><option value="false">불가</option></select>
         </div>
         <div class="form-group"><label class="form-label">LINE 심사</label>
           <select class="form-control" id="ex-line"><option value="true">가능</option><option value="false">불가</option></select>
+        </div>
+        <div class="form-group full"><label class="form-label">상태</label>
+          <select class="form-control" id="ex-status"><option>활동중</option><option>비활동</option><option>만료</option></select>
         </div>
       </div>
     </div>
@@ -3310,7 +3389,9 @@ processExcelFile = async function(file){
   }
   // 적격월(자격 유지 현황) 자동 반영
   if(typeof computeQualmFromDB==='function') computeQualmFromDB();
-  renderRecord();renderPlan();renderResult();renderCal();renderQualm();
+  // 심사기록부에 있지만 위촉심사관 명단엔 없는(=만료된) 심사관 자동 반영
+  if(typeof syncExpiredExaminersFromDB==='function'){ syncExpiredExaminersFromDB(); saveExaminerToCloud(); }
+  renderRecord();renderPlan();renderResult();renderCal();renderQualm();renderExaminer();
   calcAndDrawStat(currentUser?.ac||'전체');
   saveToStorage();
 };
@@ -3435,6 +3516,128 @@ async function processCrewFiles(fileList) {
   }
 }
 // (crew 초기 로드는 loadCrewFromCloud()에서 앱 시작 시 처리됨)
+
+// ── 위촉심사관 현황 업로드 ("인원현황조회-직책-A/C위촉심사관_기종_" 형식) ──
+// 컬럼: 사번, 이름, 직책(예: "A/C위촉심사관(A330)"), 시작일, 종료일
+function parseExaminerSheet(raw) {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const crewQualMap = {};
+  (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewQualMap[c.empid]=c.qual; });
+  const rows = [];
+  raw.forEach(row=>{
+    const empid = String(row['사번']||'').trim();
+    const name  = String(row['이름']||'').trim();
+    const jikchaek = String(row['직책']||'').trim();
+    if(!empid && !name) return;
+    if(!jikchaek.includes('위촉심사관')) return; // 위촉심사관 직책 행만 사용
+    const m = jikchaek.match(/\(([^)]+)\)/);
+    const ac = m ? m[1] : '';
+    if(!ac) return;
+    // 직책명으로 LINE(A/C)위촉심사관 / SIM위촉심사관 구분
+    const isSim  = jikchaek.toUpperCase().startsWith('SIM');
+    const isLine = jikchaek.toUpperCase().startsWith('A/C') || jikchaek.toUpperCase().startsWith('AC');
+    const start = String(row['시작일']||'').trim().substring(0,10);
+    const end   = String(row['종료일']||'').trim().substring(0,10);
+    const status = end && end < todayStr ? '만료' : '활동중';
+    rows.push({
+      ac, type:'사내 위촉심사관',
+      role: crewQualMap[empid] || '기장',
+      empid, name,
+      sim: isSim, line: isLine || (!isSim && !isLine), // 구분 안 되면 안전하게 LINE으로 간주
+      period: start&&end ? `${start}~${end}` : '',
+      status
+    });
+  });
+  return rows;
+}
+// 사번+기종이 이미 있으면 LINE/SIM 겸임으로 병합, 없으면 새로 추가 (기존 데이터를 지우지 않음)
+function upsertExaminerRow(row) {
+  const existing = examinerDB.find(e=>e.type==='사내 위촉심사관' && e.empid===row.empid && e.ac===row.ac);
+  if (existing) {
+    existing.name = row.name;
+    if (!existing.role) existing.role = row.role;
+    existing.sim = existing.sim || row.sim;
+    existing.line = existing.line || row.line;
+    if (row.period && !String(existing.period||'').includes(row.period)) {
+      existing.period = existing.period ? `${existing.period} · ${row.period}` : row.period;
+    }
+    if (row.status === '활동중') existing.status = '활동중';
+    else if (!existing.status) existing.status = row.status;
+  } else {
+    examinerDB.push({...row});
+  }
+}
+async function processExaminerFile(file, opts) {
+  if(!file) return 0;
+  await ensureXLSXLoaded();
+  const ab=await file.arrayBuffer();
+  const wb=XLSX.read(ab,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const raw=XLSX.utils.sheet_to_json(ws,{defval:''});
+  const newRows = parseExaminerSheet(raw);
+  if(!newRows.length){ if(!opts?.silent) alert(`위촉심사관 데이터를 찾을 수 없습니다. (${file.name})`); return 0; }
+  // 기존 데이터를 지우지 않고, 사번+기종이 같으면 LINE/SIM 겸임으로 병합
+  newRows.forEach(upsertExaminerRow);
+  return newRows.length;
+}
+// 사내 위촉심사관 명단만 초기화 (CAE/국토교통부는 유지) — 과거 잘못 저장된 데이터를 정리하고 다시 업로드할 때 사용
+function resetInhouseExaminers() {
+  const cnt = examinerDB.filter(e=>e.type==='사내 위촉심사관').length;
+  if (!confirm(`사내 위촉심사관 ${cnt}명 데이터를 모두 삭제합니다.\n삭제 후 위촉심사관 엑셀 파일을 다시 업로드해주세요.\n계속할까요?`)) return;
+  for (let i=examinerDB.length-1;i>=0;i--){
+    if (examinerDB[i].type==='사내 위촉심사관') examinerDB.splice(i,1);
+  }
+  renderExaminer();
+  saveExaminerToCloud();
+  const st=$('examiner-upload-status');
+  if(st){ st.textContent='🗑 사내 위촉심사관 명단을 초기화했습니다. 엑셀 파일을 다시 업로드해주세요.'; st.style.display='block'; st.style.color='var(--red)'; }
+}
+async function processExaminerFiles(fileList) {
+  const files = Array.from(fileList||[]).filter(Boolean);
+  if(!files.length) return;
+  let total=0;
+  for(const f of files) total += await processExaminerFile(f, {silent:true});
+  syncExpiredExaminersFromDB();
+  if($('examiner-role')) $('examiner-role').dataset.filled='';
+  renderExaminer();
+  saveExaminerToCloud();
+  const st=$('examiner-upload-status');
+  if(st){
+    st.textContent=`✅ 파일 ${files.length}개 처리 완료 · 이번에 반영된 위촉심사관 ${total}명 · ☁️ 클라우드 저장 중...`;
+    st.style.display='block';
+  }
+}
+
+// ── 심사기록부(DB)에는 심사관으로 기록되어 있지만, 최신 위촉심사관 명단(examinerDB)엔 없는 사람 ──
+// = 위촉 기간이 끝나 명단에서 빠진(만료) 사람으로 간주하고 자동으로 examinerDB에 "만료" 상태로 추가
+function syncExpiredExaminersFromDB() {
+  if (typeof DB==='undefined' || !DB.length) return;
+  const examinerNames = new Set(DB.map(r=>r.examiner).filter(e=>e && e!=='—'));
+  let added = 0;
+  examinerNames.forEach(fullName => {
+    // 이미 명단에 있는 사람인지(이름이 DB 표기에 포함되는지) 확인
+    const exists = examinerDB.some(ex => ex.name && fullName.includes(ex.name));
+    if (exists) return;
+    const recs = DB.filter(r=>r.examiner===fullName);
+    if (!recs.length) return;
+    const acCounts = {};
+    recs.forEach(r=>{ if(r.ac) acCounts[r.ac]=(acCounts[r.ac]||0)+1; });
+    const topAc = Object.entries(acCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'A330';
+    const hasLine = recs.some(r=>r.simline==='LINE');
+    const hasSim  = recs.some(r=>r.simline==='SIM');
+    // "홍길동 CP" 같은 표기에서 직함 접미사 제거해 이름만 추출
+    const cleanName = fullName.replace(/\s*(CP|기장|위촉심사관)\s*$/,'').trim() || fullName;
+    examinerDB.push({
+      ac: topAc, type:'사내 위촉심사관', role:'',
+      empid:'', name: cleanName,
+      sim: hasSim, line: hasLine,
+      period:'', status:'만료'
+    });
+    added++;
+  });
+  return added;
+}
 
 function renderCrew() {
   const kwEmpid = ($('crew-search-empid')?.value||'').trim().toLowerCase();
@@ -3648,19 +3851,65 @@ function doOpenExaminerDrawer() {
   if(el){el.style.display='flex';el.classList.add('open');}
 }
 
+function updateExRoleRequirement() {
+  const type = $('ex-type')?.value;
+  const wrap = $('ex-role-wrap');
+  const isInhouse = type === '사내 위촉심사관';
+  if (wrap) wrap.style.display = isInhouse ? '' : 'none';
+  if (!isInhouse && $('ex-role')) $('ex-role').value = '';
+}
 function openExaminerModal() {
   $('ex-ac').value = (currentUser?.ac!=='전체' ? currentUser?.ac : '') || '';
-  ['ex-type','ex-role','ex-empid','ex-name','ex-period'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  ['ex-type','ex-role','ex-empid','ex-name','ex-period-start','ex-period-end'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  if($('ex-sim')) $('ex-sim').value='true';
+  if($('ex-line')) $('ex-line').value='true';
+  if($('ex-status')) $('ex-status').value='활동중';
+  if($('ex-edit-idx')) $('ex-edit-idx').value='';
+  updateExRoleRequirement();
+  $('examiner-modal-icon').className = 'ti ti-user-check';
+  $('examiner-modal-title-text').textContent = '심사관 추가';
+  $('examiner-modal').classList.add('open');
+}
+function editExaminerRow(idx) {
+  const row = examinerDB[idx]; if(!row) return;
+  $('ex-ac').value = row.ac||'';
+  $('ex-type').value = row.type||'';
+  updateExRoleRequirement();
+  $('ex-role').value = row.role||'';
+  $('ex-empid').value = row.empid||'';
+  $('ex-name').value = row.name||'';
+  const [pStart,pEnd] = (row.period||'').split('~').map(s=>(s||'').trim());
+  $('ex-period-start').value = pStart||'';
+  $('ex-period-end').value = pEnd||'';
+  $('ex-sim').value = row.sim ? 'true' : 'false';
+  $('ex-line').value = row.line ? 'true' : 'false';
+  $('ex-status').value = row.status||'활동중';
+  $('ex-edit-idx').value = String(idx);
+  $('examiner-modal-icon').className = 'ti ti-edit';
+  $('examiner-modal-title-text').textContent = '심사관 수정';
   $('examiner-modal').classList.add('open');
 }
 function closeExaminerModal() { $('examiner-modal').classList.remove('open'); }
 function saveExaminer() {
-  const g=id=>$(id).value.trim();
-  const ac=g('ex-ac'),type=g('ex-type'),role=g('ex-role'),name=g('ex-name');
-  if(!ac||!type||!role||!name){alert('기종, 구분, 자격, 이름은 필수입니다.');return;}
-  examinerDB.push({ac,type,role,empid:g('ex-empid')||'—',name,
-    sim:$('ex-sim').value==='true',line:$('ex-line').value==='true',
-    period:g('ex-period')||'—',status:'활동중'});
+  const g=id=>$(id)?.value.trim()||'';
+  const ac=g('ex-ac'),type=g('ex-type'),name=g('ex-name');
+  if(!ac||!type||!name){alert('기종, 구분, 이름은 필수입니다.');return;}
+  const isInhouse = type === '사내 위촉심사관';
+  const role = isInhouse ? g('ex-role') : ''; // CAE/국토교통부 심사관은 자사 소속이 아니므로 자격 공란
+  if(isInhouse && !role){ alert('사내 위촉심사관은 자격을 선택해주세요.'); return; }
+  const pStart=g('ex-period-start'), pEnd=g('ex-period-end');
+  const period = (pStart||pEnd) ? `${pStart}~${pEnd}` : '—';
+  const data = {
+    ac, type, role, empid:g('ex-empid')||'—', name,
+    sim:$('ex-sim').value==='true', line:$('ex-line').value==='true',
+    period, status:$('ex-status')?.value||'활동중'
+  };
+  const editIdx = g('ex-edit-idx');
+  if (editIdx!=='') {
+    Object.assign(examinerDB[Number(editIdx)], data);
+  } else {
+    examinerDB.push(data);
+  }
   closeExaminerModal();
   if($('examiner-role')) $('examiner-role').dataset.filled='';
   renderExaminer();
@@ -3859,11 +4108,7 @@ renderPlan = function() {
   tbody.innerHTML = rows.length===0
     ? `<tr><td colspan="17" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
     : rows.map((r,i)=>{
-        const processDisp = r.type==='인정'
-          ? (r.dateKnow&&r.dateSkill ? `지식+기량<br><span style="font-size:9px;color:var(--muted)">지식 ${r.dateKnow}<br>기량 ${r.dateSkill}</span>`
-             : r.dateSkill ? `기량<br><span style="font-size:9px;color:var(--muted)">${r.dateSkill}</span>`
-             : `지식<br><span style="font-size:9px;color:var(--muted)">${r.dateKnow}</span>`)
-          : (r.process || '—');
+        const processDisp = getProcessDisp(r);
         return `<tr>
         <td class="center"><input type="checkbox" class="plan-row-check" data-id="${r.id}" ${planSelectedIds.has(r.id)?'checked':''} onchange="togglePlanRowSelect(${r.id},this.checked)"></td>
         <td>${i+1}</td>
@@ -4263,7 +4508,7 @@ renderRecord = function() {
     return acOk && dtOk && kwOk && resOk;
   });
   $('record-tbody').innerHTML = rows.length===0
-    ?`<tr><td colspan="14" class="empty-state">해당 조건의 기록이 없습니다</td></tr>`
+    ?`<tr><td colspan="15" class="empty-state">해당 조건의 기록이 없습니다</td></tr>`
     :rows.map((r,i)=>{
       const resCls = r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
       const resLabel = r.result||'미입력';
@@ -4274,6 +4519,7 @@ renderRecord = function() {
         <td>${r.subtype||'—'}</td><td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
         <td>${r.empid||'—'}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight||'—'}</td>
         <td>${r.examiner||'—'}</td><td>${r.place||'—'}</td>
+        <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
         <td class="center"><span class="badge-tag ${resCls}">${resLabel}</span></td>
         <td>${r.note||'—'}</td>
       </tr>`;
