@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SELOS ADMIN — Trinity Airways</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- 웹폰트를 직접 불러와 Windows/Mac/Linux 어디서 열어도 글자 폭이 동일하게 렌더링되도록 함
+     (기존 '맑은 고딕'은 Windows 전용이라 다른 OS에서 대체 폰트로 바뀌며 레이아웃이 깨졌음) -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -40,7 +44,7 @@ const CLOUD_COLLECTION = 'selos_admin_data'; // 문서: db, qualm, crew, examine
   --a330:#C8927A; --b737:#6A85A3; --b777:#8A75B0;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
 /* 확대는 사이드바를 제외한 우측 콘텐츠 영역(.main-content)에만 적용 — 사이드바는 아예 손대지 않아 원래 크기/레이아웃 그대로 유지됨 */
 .main-content{zoom:1.15}
 #page-stat{zoom:0.8696} /* 통계 페이지는 기존 크기 유지 — 차트 4개가 스크롤 없이 한 화면에 보이도록 */
@@ -204,7 +208,7 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 .chart-wrap.tall{height:220px}
 
 /* ── 테이블 공통 ── */
-.table-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+.table-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow-x:auto;overflow-y:hidden;margin-bottom:14px}
 .table-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
 .table-title{font-size:12px;font-weight:700;color:var(--navy)}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
@@ -213,11 +217,13 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 .tbl th.sortable:hover{color:var(--rg)}
 .tbl th.sort-active{color:var(--rg)}
 
-.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;white-space:nowrap}
+/* 표 안 글자는 절대 줄바꿈하지 않음. 화면이 좁으면 표 자체가 가로 스크롤됨 */
+.tbl td .filter-input,.tbl td .filter-select{max-width:100%}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:#FAF8F6}
 .tbl td.center,.tbl th.center{text-align:center}
-.badge-tag{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.3px}
+.badge-tag{display:inline-flex;align-items:center;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.3px;white-space:nowrap;flex-shrink:0}
 .tag-line{background:#EEF3F8;color:var(--line);border:1px solid #CEDFEE}
 .tag-sim{background:#F7F3ED;color:var(--sim);border:1px solid #E4D4BA}
 .tag-pass{background:#EEF6EE;color:var(--pass);border:1px solid #C8E0C8}
@@ -288,10 +294,19 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 .cal-ev-examiner{font-size:9px;font-weight:600;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .cal-popup{
   position:absolute; z-index:60; left:4px; right:4px;
+  min-width:230px; /* 달력 칸이 좁아도 팝업 내용이 찌그러지지 않도록 */
   background:#fff; border:1px solid var(--border2); border-radius:9px;
   box-shadow:0 10px 28px rgba(0,0,0,.16); padding:10px 12px;
 }
 .cal-popup-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle;flex-shrink:0}
+/* 제목과 ✕ 버튼이 항상 한 줄에 나란히 — 좁은 화면/큰 폰트에서도 ✕가 아래로 밀리지 않게 */
+.cal-popup-title{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font-size:11.5px; font-weight:700; color:var(--text);
+  padding-bottom:6px; border-bottom:1px solid var(--border); margin-bottom:2px;
+}
+.cal-popup-title > span:first-child{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.cal-popup-title > button{flex-shrink:0; line-height:1}
 .cal-set-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#5B7FA6;vertical-align:middle;margin-right:3px}
 
 
@@ -318,7 +333,7 @@ html,body{height:100%;font-family:'맑은 고딕','Noto Sans KR',sans-serif;back
 
 /* 기타 유틸 */
 .empty-state{text-align:center;padding:40px;color:var(--muted);font-size:12px}
-.badge-num{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:#FEF0EE;color:var(--red);border:1px solid #EED0CC}
+.badge-num{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:#FEF0EE;color:var(--red);border:1px solid #EED0CC;white-space:nowrap;flex-shrink:0}
 .page-section{display:none}
 .page-section.active{display:block}
 select{font-family:inherit}
@@ -424,23 +439,25 @@ select{font-family:inherit}
 }
 .modal-box{
   background:#fff;border-radius:14px;width:560px;max-width:95vw;max-height:90vh;
-  overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.18);
+  overflow-y:auto;overflow-x:hidden;box-shadow:0 16px 48px rgba(0,0,0,.18);
 }
 .modal-header{
   display:flex;align-items:center;justify-content:space-between;
   padding:16px 20px;border-bottom:1px solid var(--border);
 }
 .modal-title{font-size:14px;font-weight:700;color:var(--navy)}
-.modal-close{width:28px;height:28px;border-radius:6px;border:1px solid var(--border2);background:#fff;cursor:pointer;font-size:16px;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.modal-close{width:28px;height:28px;border-radius:6px;border:1px solid var(--border2);background:#fff;cursor:pointer;font-size:16px;color:var(--muted);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .modal-close:hover{border-color:var(--red);color:var(--red)}
-.modal-body{padding:20px}
+.modal-body{padding:20px;overflow-x:hidden}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.form-group{display:flex;flex-direction:column;gap:5px}
+/* min-width:0 이 없으면 date/select 같은 요소의 기본 최소너비가 그리드 칸을 밀어내 가로 스크롤이 생김 */
+.form-group{display:flex;flex-direction:column;gap:5px;min-width:0}
 .form-group.full{grid-column:1/-1}
 .form-label{font-size:11px;font-weight:700;color:var(--muted)}
 .form-control{
   font-size:12px;border:1px solid var(--border2);border-radius:6px;
   padding:6px 10px;color:var(--text);background:#fff;outline:none;font-family:inherit;
+  width:100%;min-width:0;max-width:100%;
 }
 .form-control:focus{border-color:var(--rg);box-shadow:0 0 0 2px rgba(200,146,122,.12)}
 .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
@@ -481,6 +498,7 @@ select{font-family:inherit}
       <div class="sb-item" onclick="nav('plan')"><i class="ti ti-clipboard-list"></i> 심사계획 관리</div>
       <div class="sb-item" onclick="nav('cal')"><i class="ti ti-calendar-month"></i> 심사달력</div>
       <div class="sb-item" onclick="nav('result')"><i class="ti ti-circle-check"></i> 심사결과 관리 <span class="sb-badge" id="badge-result">2</span></div>
+      <div class="sb-item" onclick="nav('flyco')"><i class="ti ti-chart-histogram"></i> 심사결과분석</div>
       <div class="sb-item" onclick="nav('record')"><i class="ti ti-file-text"></i> 심사기록부</div>
       <div class="sb-item active" onclick="nav('stat')"><i class="ti ti-chart-bar"></i> 통계</div>
       <div class="sb-section">기준관리</div>
@@ -513,6 +531,7 @@ select{font-family:inherit}
       <!-- ─── 통계 ─── -->
       <div class="page-section active" id="page-stat">
         <div class="tab-bar">
+          <button class="tab-btn" data-mode="월" onclick="setStatMode('월')">월별</button>
           <button class="tab-btn active" data-mode="분기" onclick="setStatMode('분기')">분기별</button>
           <button class="tab-btn" data-mode="반기" onclick="setStatMode('반기')">반기별</button>
           <button class="tab-btn" data-mode="연도" onclick="setStatMode('연도')">연도별</button>
@@ -791,6 +810,9 @@ select{font-family:inherit}
             <button class="btn btn-outline btn-sm" onclick="resetResult()">초기화</button>
             <button class="btn btn-primary btn-sm" style="background:#5A7A9A" onclick="saveResults()"><i class="ti ti-device-floppy"></i> 저장</button>
             <button class="btn btn-excel btn-sm" onclick="exportResultExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
+            <button class="btn btn-outline btn-sm" onclick="exportKrionSubmission()" style="color:#5A4080;border-color:#D8CEEC">
+              <i class="ti ti-building-bank" style="font-size:12px"></i> 국토부 제출용
+            </button>
           </div>
         </div>
         <div class="big-month-nav">
@@ -874,9 +896,9 @@ select{font-family:inherit}
           <div class="table-head"><span class="table-title">심사기록부 (최근 3년)</span></div>
           <table class="tbl">
             <thead><tr>
-              <th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>기종</th>
+              <th>No</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>과정</th><th>기종</th>
               <th>자격</th><th>사번</th><th>이름</th><th>심사일</th><th>편명/구간</th>
-              <th>심사관</th><th>심사장소</th><th>과정</th><th class="center">결과</th><th>비고</th>
+              <th>심사관</th><th>심사장소</th><th class="center">결과</th><th>비고</th>
             </tr></thead>
             <tbody id="record-tbody"></tbody>
           </table>
@@ -997,7 +1019,7 @@ select{font-family:inherit}
           </div>
           <div class="filter-item"><span class="filter-label">상태</span>
             <select class="filter-select" id="examiner-status" onchange="renderExaminer()">
-              <option value="전체">전체</option><option>활동중</option><option>비활동</option><option>만료</option>
+              <option value="전체">전체</option><option selected>활동중</option><option>비활동</option><option>만료</option>
             </select>
           </div>
           <div class="filter-actions" style="margin-left:auto">
@@ -1010,10 +1032,124 @@ select{font-family:inherit}
           <div class="table-head"><span class="table-title">심사관 현황</span></div>
           <table class="tbl">
             <thead><tr>
-              <th>No</th><th>기종</th><th>구분</th><th>코드</th><th>자격</th><th>사번</th><th>이름</th>
-              <th>위촉기간</th><th>상태수정</th><th class="center">상태</th><th class="center">수정</th><th class="center">삭제</th>
+              <th>No</th><th>기종</th><th>구분</th><th>코드</th><th>심사관코드</th><th>자격</th><th>사번</th><th>이름</th>
+              <th>위촉기간</th><th id="th-examiner-status-edit" style="display:none">상태변경</th><th class="center">상태</th><th class="center">수정</th><th class="center">삭제</th>
             </tr></thead>
             <tbody id="examiner-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ─── 심사결과분석 (FLYCO/PDF 체크폼 기반) ─── -->
+      <div class="page-section" id="page-flyco">
+        <div class="upload-zone" style="padding:16px;margin-bottom:10px"
+          onclick="document.getElementById('flyco-file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="event.preventDefault();this.classList.remove('drag');processFlycoFiles(event.dataTransfer.files)">
+          <i class="ti ti-file-report" style="font-size:20px;display:block;margin-bottom:4px"></i>
+          <div style="font-weight:700;font-size:11px">심사기록부 PDF 업로드 (여러 개 한번에 선택 가능, 월 20~100건)</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Trinity 자체 체크폼(지식/기량/SIM/PC) + 국토부 공식서식(기량심사표) 자동 인식 · 국토부 서식은 1~5점 없이 결과만 반영</div>
+        </div>
+        <input type="file" id="flyco-file-input" accept=".pdf" multiple style="display:none"
+          onchange="processFlycoFiles(this.files);this.value=''">
+        <div id="flyco-upload-status" style="font-size:11px;color:var(--green);margin-bottom:10px;display:none"></div>
+
+        <div class="stat-grid" style="grid-template-columns:repeat(5,1fr)">
+          <div class="stat-card blue"><div class="stat-top-border"></div>
+            <div class="stat-card-top"><span class="stat-label">총 업로드 건수</span></div>
+            <div class="stat-val" id="flyco-val-total">0</div>
+          </div>
+          <div class="stat-card green"><div class="stat-top-border"></div>
+            <div class="stat-card-top"><span class="stat-label">점수표 반영(1~5점)</span></div>
+            <div class="stat-val" id="flyco-val-scored">0</div>
+            <div class="stat-hint">Trinity 자체 기량체크</div>
+          </div>
+          <div class="stat-card amber"><div class="stat-top-border"></div>
+            <div class="stat-card-top"><span class="stat-label">국토부 서식 (아래 데이터에 반영되지 않음)</span></div>
+            <div class="stat-val" id="flyco-val-official">0</div>
+          </div>
+          <div class="stat-card red clickable" onclick="renderFlycoFailList()" style="cursor:pointer">
+            <div class="stat-top-border"></div>
+            <div class="stat-card-top"><span class="stat-label">불합격</span></div>
+            <div class="stat-val" id="flyco-val-fail">0</div>
+          </div>
+          <div class="stat-card blue"><div class="stat-top-border"></div>
+            <div class="stat-card-top"><span class="stat-label">검토 필요 (오류 가능성)</span></div>
+            <div class="stat-val" id="flyco-val-review">0</div>
+            <div class="stat-hint">아래 표에서 직접 확인/수정</div>
+          </div>
+        </div>
+
+        <div id="flyco-chart-section">
+          <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px">
+            <button class="btn btn-outline btn-sm" onclick="exportFlycoChartsPDF(event)"><i class="ti ti-file-type-pdf" style="font-size:12px"></i> 차트 PDF 다운로드</button>
+            <button class="btn btn-outline btn-sm" onclick="exportFlycoChartsExcel()"><i class="ti ti-file-spreadsheet" style="font-size:12px"></i> 차트 데이터 엑셀</button>
+          </div>
+          <div class="chart-grid">
+            <div class="chart-card">
+              <div class="chart-title">항공기(LINE) 점수 분포</div>
+              <div class="chart-subtitle">인정/정기/수시 · 1~5점 (Trinity 기량체크 기준) · 막대 더블클릭 시 명단 확인</div>
+              <div class="chart-wrap" style="height:220px;max-height:220px"><canvas id="chart-flyco-line"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">SIM 점수 분포</div>
+              <div class="chart-subtitle">인정/정기/수시 · 1~5점 (Trinity 기량체크 기준) · 막대 더블클릭 시 명단 확인</div>
+              <div class="chart-wrap" style="height:220px;max-height:220px"><canvas id="chart-flyco-sim"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="filter-item"><span class="filter-label">기종</span>
+            <select class="filter-select" id="flyco-ac" onchange="renderFlyco()"></select>
+          </div>
+          <div class="filter-item"><span class="filter-label">항공기/SIM</span>
+            <select class="filter-select" id="flyco-simline" onchange="renderFlyco()">
+              <option value="전체">전체</option><option value="LINE">항공기</option><option value="SIM">SIM</option>
+            </select>
+          </div>
+          <div class="filter-item"><span class="filter-label">심사종류</span>
+            <select class="filter-select" id="flyco-type" onchange="renderFlyco()">
+              <option value="전체">전체</option><option>인정</option><option>정기</option><option>수시</option>
+            </select>
+          </div>
+          <div class="filter-item"><span class="filter-label">자격</span>
+            <select class="filter-select" id="flyco-qual" onchange="renderFlyco()">
+              <option value="전체">전체</option><option>기장</option><option>부기장</option><option>훈련기장</option><option>훈련부기장</option>
+            </select>
+          </div>
+          <div class="filter-item"><span class="filter-label">결과</span>
+            <select class="filter-select" id="flyco-result" onchange="renderFlyco()">
+              <option value="전체">전체</option><option>합격</option><option>불합격</option>
+            </select>
+          </div>
+          <div class="filter-actions" style="margin-left:auto">
+            <button class="btn btn-outline btn-sm" onclick="resetFlycoFilter()">초기화</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--fail);border-color:#EDD0CC" onclick="clearFlycoAll()"><i class="ti ti-trash"></i> 전체 삭제</button>
+            <button class="btn btn-excel btn-sm" onclick="exportFlycoAnalysis()"><i class="ti ti-file-spreadsheet"></i> 심사결과분석 다운로드</button>
+          </div>
+        </div>
+        <div class="table-card">
+          <div class="table-head"><span class="table-title">심사기록 검토 목록 <span style="font-size:10px;color:var(--muted);font-weight:500">— 자동 추출값 오류 발생할 경우 수정 가능</span></span></div>
+          <table class="tbl">
+            <thead><tr>
+              <th>기종</th><th>항공기/SIM</th><th>심사종류</th><th>자격</th>
+              <th>사번</th><th>이름</th><th>심사일</th><th>총점</th><th class="center">결과</th>
+              <th>심사관</th><th class="center">작업</th>
+            </tr></thead>
+            <tbody id="flyco-tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="table-card" id="flyco-fail-card" style="display:none;margin-top:14px">
+          <div class="table-head"><span class="table-title">불합격 사항 <span style="font-size:10px;color:var(--muted);font-weight:500">— 주요지적사항/조치내용은 총평 회신받아 직접 입력</span></span></div>
+          <table class="tbl">
+            <thead><tr>
+              <th>구분</th><th>일자</th><th>기종</th><th>직급</th><th>심사구분</th><th>이름</th><th>심사관</th>
+              <th>주요지적사항</th><th>조치내용</th><th>결과</th>
+            </tr></thead>
+            <tbody id="flyco-fail-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -1021,6 +1157,68 @@ select{font-family:inherit}
     </div><!-- /page-content -->
   </div><!-- /main-content -->
 </div><!-- /main-screen -->
+
+<!-- ── 심사결과분석 수정 모달 ── -->
+<div class="modal-overlay" id="flyco-edit-modal">
+  <div class="modal-box" style="width:460px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-edit" style="margin-right:6px"></i>심사기록 수정</span>
+      <button class="modal-close" onclick="closeFlycoEditModal()">✕</button>
+    </div>
+    <input type="hidden" id="flyco-edit-id">
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">기종</label>
+          <select class="form-control" id="flyco-edit-ac"><option value="">선택</option><option>A330</option><option>B737</option><option>B777</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">항공기/SIM</label>
+          <select class="form-control" id="flyco-edit-simline"><option value="LINE">항공기</option><option value="SIM">SIM</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">심사종류</label>
+          <select class="form-control" id="flyco-edit-type"><option value="">선택</option><option>인정</option><option>정기</option><option>수시</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">자격</label>
+          <select class="form-control" id="flyco-edit-qual">
+            <option value="">선택</option><option>기장</option><option>부기장</option><option>훈련기장</option><option>훈련부기장</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">사번</label>
+          <input class="form-control" id="flyco-edit-empid"></div>
+        <div class="form-group"><label class="form-label">이름</label>
+          <input class="form-control" id="flyco-edit-name"></div>
+        <div class="form-group"><label class="form-label">심사일</label>
+          <input class="form-control" id="flyco-edit-date" type="date"></div>
+        <div class="form-group"><label class="form-label">총점</label>
+          <input class="form-control" id="flyco-edit-score" placeholder="1~5"></div>
+        <div class="form-group"><label class="form-label">결과</label>
+          <select class="form-control" id="flyco-edit-result"><option value="">선택</option><option>합격</option><option>불합격</option></select>
+        </div>
+        <div class="form-group full"><label class="form-label">심사관</label>
+          <input class="form-control" id="flyco-edit-examiner"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeFlycoEditModal()">취소</button>
+      <button class="btn btn-primary" onclick="saveFlycoEdit()"><i class="ti ti-device-floppy"></i> 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 점수 분포 드릴다운 모달 ── -->
+<div class="modal-overlay" id="flyco-drill-modal">
+  <div class="modal-box" style="width:420px">
+    <div class="modal-header">
+      <span class="modal-title" id="flyco-drill-title">인원 명단</span>
+      <button class="modal-close" onclick="closeFlycoDrillModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <table class="tbl">
+        <thead><tr><th>이름</th><th>사번</th><th>자격</th><th>기종</th></tr></thead>
+        <tbody id="flyco-drill-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
 <!-- ── 불합격 드로어 ── -->
 <!-- ── 불합격 상세 모달 ── -->
@@ -1170,6 +1368,13 @@ select{font-family:inherit}
         <div class="form-group">
           <label class="form-label">심사장소</label>
           <input class="form-control" id="fm-place" placeholder="예) 김포공항, Sim센터">
+        </div>
+        <div class="form-group">
+          <label class="form-label">내/외국인</label>
+          <select class="form-control" id="fm-nationality">
+            <option value="내국인" selected>내국인</option>
+            <option value="외국인">외국인</option>
+          </select>
         </div>
         <div class="form-group full">
           <label class="form-label">비고</label>
@@ -1365,7 +1570,20 @@ function dbFilter(acVal, dateRange) {
 }
 
 // 기간 범위 계산
+// 월별 구간은 최근 24개월을 자동 생성 (하드코딩하면 해가 바뀔 때마다 손봐야 함)
+function buildMonthlyRanges() {
+  const out = {};
+  const now = new Date();
+  for (let i=0; i<24; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    const y = d.getFullYear(), m = d.getMonth()+1;
+    const last = new Date(y, m, 0).getDate();
+    out[`${y}년 ${m}월`] = [`${y}-${String(m).padStart(2,'0')}-01`, `${y}-${String(m).padStart(2,'0')}-${String(last).padStart(2,'0')}`];
+  }
+  return out;
+}
 const PERIOD_RANGES = {
+  '월': buildMonthlyRanges(),
   '분기': {
     '2026년 1분기':['2026-01-01','2026-03-31'],
     '2026년 2분기':['2026-04-01','2026-06-30'],
@@ -1447,9 +1665,9 @@ function initAllSelects() {
 const PAGE_TITLES = {
   stat:['통계',''],qualm:['적격월 관리',''],plan:['심사계획 관리',''],
   cal:['심사달력',''],result:['심사결과 관리',''],record:['심사기록부',''],examiner:['심사관 관리',''],
-  crew:['운항승무원 현황',''],
+  crew:['운항승무원 현황',''],flyco:['심사결과분석',''],
 };
-const PAGE_MAP = ['qualm','plan','cal','result','record','stat','crew','examiner'];
+const PAGE_MAP = ['qualm','plan','cal','result','flyco','record','stat','crew','examiner'];
 
 function nav(page) {
   document.querySelectorAll('.sb-item').forEach((el,i)=>el.classList.toggle('active', PAGE_MAP[i]===page));
@@ -1491,6 +1709,7 @@ function nav(page) {
   if (page==='result')   renderResult();
   if (page==='record')   renderRecord();
   if (page==='examiner') renderExaminer();
+  if (page==='flyco') renderFlyco();
   if (page==='cal')      renderCal();
 }
 
@@ -1649,7 +1868,7 @@ function exportStatExcel() {
 <title>SELOS ADMIN 통계 — ${statPeriodKey}</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"><\/script>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0;font-family:'맑은 고딕','Noto Sans KR',sans-serif}
+  *{box-sizing:border-box;margin:0;padding:0;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic','Apple SD Gothic Neo',sans-serif}
   body{background:#F5F2EE;padding:32px;color:#2C2A27;font-size:13px}
   h1{font-size:18px;font-weight:800;color:#2E2B27;margin-bottom:4px}
   .meta{font-size:11px;color:#9A8A7E;margin-bottom:28px}
@@ -2010,6 +2229,7 @@ function closePlanModal() {
   ['fm-simline','fm-ac','fm-type','fm-subtype','fm-qual'].forEach(id=>$(id).value='');
   ['fm-empid','fm-name','fm-date','fm-flight','fm-examiner','fm-place','fm-note'].forEach(id=>$(id).value='');
   ['fm-date-know','fm-date-skill','fm-process','fm-edit-id','fm-edit-setid'].forEach(id=>{if($(id))$(id).value='';});
+  if($('fm-nationality')) $('fm-nationality').value='내국인';
   const panel=$('plan-modal-eligible-panel'); if(panel) panel.style.display='none';
   const icon=$('plan-modal-icon'); if(icon) icon.className='ti ti-plus';
   const title=$('plan-modal-title-text'); if(title) title.textContent='심사계획 추가';
@@ -2135,6 +2355,91 @@ function exportResultExcel() {
     `심사결과_${ry}년${rm}월_${ac}.csv`);
 }
 
+// ── 국토부 "운항자격심사결과입력폼" 자동 생성 ──
+// 매달 국토부에 수기로 제출하던 양식을 SELOS-ADMIN 데이터에서 그대로 뽑아냄
+// 인정심사(지식+기량 날짜가 다른 경우)는 국토부 양식 규칙에 맞춰 지식/기량 두 줄로 나눠서 내보냄
+function empidToKrion(empid) {
+  if (!empid || empid==='—') return '';
+  return 'TWB' + empid.replace(/^T/i, '');
+}
+function simlineToKrion(sl) { return sl==='SIM' ? 'SIM' : '항공기'; }
+async function exportKrionSubmission() {
+  await ensureXLSXLoaded();
+  const ry = typeof resultYear!=='undefined' ? resultYear : new Date().getFullYear();
+  const rm = typeof resultMonth!=='undefined' ? resultMonth : new Date().getMonth()+1;
+  const ym = `${ry}-${String(rm).padStart(2,'0')}`;
+
+  // 사내 위촉심사관 이름 목록 (이 사람들이 직접 수행한 심사만 국토부 제출 대상)
+  const inhouseNames = examinerDB.filter(e=>e.type==='사내 위촉심사관').map(e=>e.name).filter(Boolean);
+  function isInhouseExaminer(examinerField) {
+    if (!examinerField || examinerField==='—') return false;
+    return inhouseNames.some(name=>examinerField.includes(name));
+  }
+
+  // 국토부 제출은 항공사 전체 기준이라 기종 필터는 무시하고, 해당 월 + 사내 위촉심사관이 수행한 심사만 포함
+  const rows = DB.filter(r=>r.date.startsWith(ym) && isInhouseExaminer(r.examiner));
+  if (!rows.length) { alert(`${ry}년 ${rm}월에 사내 위촉심사관이 수행한 심사 데이터가 없습니다.`); return; }
+
+  const examinerCodeMap = {};
+  examinerDB.forEach(e=>{ if(e.name && e.code) examinerCodeMap[e.name]=e.code; });
+  function findExaminerCode(examinerField) {
+    if (!examinerField || examinerField==='—') return '';
+    if (examinerCodeMap[examinerField]) return examinerCodeMap[examinerField];
+    // "홍길동 CP" 처럼 뒤에 직함이 붙어있는 경우 대비, 이름이 포함되는 것으로 재탐색
+    const found = Object.keys(examinerCodeMap).find(name=>examinerField.includes(name));
+    return found ? examinerCodeMap[found] : '';
+  }
+
+  const headers = ['년월','사업구분','항공사','심사종류','세부구분','기종','심사자격','조종사\n사번','조종사성명','내/외국인','과정','심사일','SIM/\n항공기','심사관코드','심사관명','심사노선','합격여부','비고'];
+  const out = [];
+  rows.forEach(r=>{
+    const base = {
+      '년월': `${ym}-01`,
+      '사업구분': '국외_정기',
+      '항공사': '트리니티항공',
+      '심사종류': r.type||'',
+      '세부구분': r.subtype||'',
+      '기종': r.ac||'',
+      '심사자격': r.qual||'',
+      '조종사\n사번': empidToKrion(r.empid),
+      '조종사성명': r.name||'',
+      '내/외국인': r.nationality || '내국인',
+      'SIM/\n항공기': simlineToKrion(r.simline),
+      '심사관코드': findExaminerCode(r.examiner),
+      '심사관명': r.examiner||'',
+      '심사노선': r.simline==='LINE' ? (r.flight&&r.flight!=='—'?r.flight:'') : (r.place&&r.place!=='—'?r.place:'SIM'),
+      '합격여부': r.result||'',
+      '비고': r.note||''
+    };
+    // 과정이 지식+기량(겸임)이면 심사종류 상관없이 국토부 양식 규칙대로 지식/기량 2줄로 분리
+    // 지식/기량 날짜를 따로 입력해뒀으면 그 날짜를 각각 쓰고, 날짜가 하나뿐이면 같은 날짜로 2줄 처리
+    const isCombined = r.dateKnow && r.dateSkill
+      ? true
+      : /지식\s*[+&]\s*기량/.test(r.process||'');
+    if (isCombined) {
+      out.push({...base, '과정':'지식', '심사일': r.dateKnow || r.date});
+      out.push({...base, '과정':'기량', '심사일': r.dateSkill || r.date});
+    } else if (r.dateKnow) {
+      out.push({...base, '과정':'지식', '심사일': r.dateKnow});
+    } else if (r.dateSkill) {
+      out.push({...base, '과정':'기량', '심사일': r.dateSkill});
+    } else {
+      out.push({...base, '과정':r.process||'', '심사일':r.date});
+    }
+  });
+
+  const missingCode = out.filter(o=>!o['심사관코드']);
+  const aoa = [headers, ...out.map(o=>headers.map(h=>o[h]))];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '심사수행결과업로드');
+  XLSX.writeFile(wb, `운항자격심사결과입력폼_${ry}년_${rm}월.xlsx`);
+
+  if (missingCode.length) {
+    alert(`⚠ 총 ${out.length}건 중 ${missingCode.length}건은 심사관코드가 비어있어요.\n심사관 관리 페이지에서 해당 심사관의 "심사관코드"를 입력해두시면 다음부터 자동으로 채워져요.`);
+  }
+}
+
 // ══════════════════════════════════════════════════════════════════
 // ⑩ 심사기록부
 // ══════════════════════════════════════════════════════════════════
@@ -2199,6 +2504,31 @@ function updateExaminerPeriod(idx, startVal, endVal) {
   saveExaminerToCloud();
 }
 
+// ── 심사관 행 인라인 수정 (수정 버튼을 눌러야 해당 행에 입력칸이 열림) ──
+let examinerEditIdx = null;
+function startExaminerInlineEdit(idx) { examinerEditIdx = idx; renderExaminer(); }
+function cancelExaminerInlineEdit() { examinerEditIdx = null; renderExaminer(); }
+function saveExaminerInlineEdit(idx) {
+  const row = examinerDB[idx];
+  if (row) {
+    const isInhouse = row.type==='사내 위촉심사관';
+    if (isInhouse) {
+      const codeEl = $(`ex-inline-code-${idx}`);
+      if (codeEl) row.code = codeEl.value.trim();
+      const psEl = $(`ex-inline-ps-${idx}`), peEl = $(`ex-inline-pe-${idx}`);
+      if (psEl || peEl) {
+        const s = psEl ? psEl.value : '', e = peEl ? peEl.value : '';
+        row.period = (s||e) ? `${s}~${e}` : '';
+      }
+    }
+    const stEl = $(`ex-inline-status-${idx}`);
+    if (stEl) row.status = stEl.value;
+  }
+  examinerEditIdx = null;
+  renderExaminer();
+  saveExaminerToCloud();
+}
+
 function renderExaminer() {
   const ac=$('examiner-ac')?.value||'전체';
   const type=$('examiner-type')?.value||'전체';
@@ -2233,48 +2563,79 @@ function renderExaminer() {
     (!kwName ||(r.name ||'').toLowerCase().includes(kwName))
   );
   $('examiner-tbody').innerHTML=rows.length===0
-    ?`<tr><td colspan="11" class="empty-state">해당 조건의 심사관이 없습니다</td></tr>`
+    ?`<tr><td colspan="13" class="empty-state">해당 조건의 심사관이 없습니다</td></tr>`
     :rows.map((r,i)=>{
       const typeCls=r.type==='국토교통부 심사관'?'tag-정기':r.type==='CAE 심사관'?'tag-sim':'tag-line';
       const code=getExaminerCode(r);
-      const codeCls = code==='—' ? 'tag-pend' : (r.line&&r.sim?'tag-인정':r.line?'tag-line':'tag-sim');
+      // 배지 색상은 line/sim 조합이 아니라 code 문자열 자체로 결정 — 같은 코드는 항상 같은 색이 되도록
+      const codeCls = code==='DLCP' ? 'tag-line' : code==='DSCP' ? 'tag-sim' : code==='DLCP/DSCP' ? 'tag-인정' : code==='CHK' ? 'tag-정기' : 'tag-pend';
       const statusCls=r.status==='활동중'?'tag-pass':'tag-fail';
       const idx=examinerDB.indexOf(r);
       const [pStart,pEnd] = (r.period||'').split('~').map(s=>(s||'').trim());
-      return `<tr>
+      // 심사관코드/위촉기간은 "사내 위촉심사관"에게만 해당 (CAE/국토교통부는 위촉 대상이 아님)
+      const isInhouse = r.type==='사내 위촉심사관';
+      const editing = examinerEditIdx === idx;
+
+      const codeCell = !isInhouse ? `<td style="color:var(--hint)">—</td>`
+        : editing
+          ? `<td><input class="filter-input" id="ex-inline-code-${idx}" value="${(r.code||'').replace(/"/g,'&quot;')}" placeholder="예) DCP1717" style="width:96px;font-size:11px"></td>`
+          : `<td>${r.code||'<span style="color:var(--hint)">—</span>'}</td>`;
+
+      const periodCell = !isInhouse ? `<td style="color:var(--hint)">—</td>`
+        : editing
+          ? `<td><div style="display:flex;align-items:center;gap:3px">
+               <input type="date" class="filter-input" id="ex-inline-ps-${idx}" value="${pStart||''}" style="width:126px;font-size:10px;padding:3px 4px">
+               <span style="color:var(--muted);font-size:10px">~</span>
+               <input type="date" class="filter-input" id="ex-inline-pe-${idx}" value="${pEnd||''}" style="width:126px;font-size:10px;padding:3px 4px">
+             </div></td>`
+          : `<td>${(pStart||pEnd) ? `${pStart||''} ~ ${pEnd||''}` : '<span style="color:var(--hint)">—</span>'}</td>`;
+
+      // 상태변경 칸은 수정 모드일 때만 노출 (평소엔 컬럼 자체가 숨겨짐)
+      const statusEditCell = editing
+        ? `<td>
+             <select class="filter-select" id="ex-inline-status-${idx}" style="font-size:11px">
+               <option ${r.status==='활동중'?'selected':''}>활동중</option>
+               <option ${r.status==='비활동'?'selected':''}>비활동</option>
+               <option ${r.status==='만료'?'selected':''}>만료</option>
+             </select>
+           </td>`
+        : (examinerEditIdx!==null ? `<td></td>` : `<td style="display:none"></td>`);
+
+      const actionCells = editing
+        ? `<td class="center">
+             <button class="btn btn-sm" style="background:#E9F2EA;color:var(--green);border:1px solid #C6DCC9;padding:2px 8px" title="저장"
+               onclick="saveExaminerInlineEdit(${idx})"><i class="ti ti-check" style="font-size:12px"></i></button>
+           </td>
+           <td class="center">
+             <button class="btn btn-sm" style="background:#F2F0ED;color:var(--muted);border:1px solid var(--border2);padding:2px 8px" title="취소"
+               onclick="cancelExaminerInlineEdit()"><i class="ti ti-x" style="font-size:12px"></i></button>
+           </td>`
+        : `<td class="center">
+             <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 8px" title="수정"
+               onclick="startExaminerInlineEdit(${idx})"><i class="ti ti-edit" style="font-size:12px"></i></button>
+           </td>
+           <td class="center">
+             <button class="btn btn-sm" style="background:#FEF0EE;color:var(--fail);border:1px solid #EDD0CC;padding:2px 8px" title="삭제"
+               onclick="deleteExaminer(${idx})"><i class="ti ti-trash" style="font-size:12px"></i></button>
+           </td>`;
+
+      return `<tr${editing?' style="background:#FBF7F2"':''}>
         <td>${i+1}</td><td>${acDot(r.ac)}</td>
         <td><span class="badge-tag ${typeCls}" style="font-size:9px">${r.type}</span></td>
         <td><span class="badge-tag ${codeCls}" style="font-size:9px" title="${code==='DLCP'?'Designated Line Check Pilot':code==='DSCP'?'Designated Sim Check Pilot':code==='DLCP/DSCP'?'Designated Line/Sim Check Pilot (겸임)':code==='CHK'?'국토교통부 심사관':''}">${code}</span></td>
+        ${codeCell}
         <td>${r.role||'—'}</td>
         <td>${r.empid||'—'}</td>
-        <td style="font-weight:600">${r.name}</td>
-        <td>
-          <div style="display:flex;align-items:center;gap:3px">
-            <input type="date" class="filter-input" value="${pStart||''}" style="width:120px;font-size:10px;padding:3px 4px"
-              onchange="updateExaminerPeriod(${idx},this.value,null)">
-            <span style="color:var(--muted);font-size:10px">~</span>
-            <input type="date" class="filter-input" value="${pEnd||''}" style="width:120px;font-size:10px;padding:3px 4px"
-              onchange="updateExaminerPeriod(${idx},null,this.value)">
-          </div>
-        </td>
-        <td>
-          <select class="filter-select" style="font-size:11px" onchange="examinerDB[${idx}].status=this.value;renderExaminer();saveExaminerToCloud()">
-            <option ${r.status==='활동중'?'selected':''}>활동중</option>
-            <option ${r.status==='비활동'?'selected':''}>비활동</option>
-            <option ${r.status==='만료'?'selected':''}>만료</option>
-          </select>
-        </td>
+        <td style="font-weight:600;cursor:pointer" ondblclick="editExaminerRow(${idx})" title="더블클릭하면 기종·구분·영문명까지 전체 수정">${r.name}</td>
+        ${periodCell}
+        ${statusEditCell}
         <td class="center"><span class="badge-tag ${statusCls}">${r.status}</span></td>
-        <td class="center">
-          <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 8px"
-            onclick="editExaminerRow(${idx})"><i class="ti ti-edit" style="font-size:12px"></i></button>
-        </td>
-        <td class="center">
-          <button class="btn btn-sm" style="background:#FEF0EE;color:var(--fail);border:1px solid #EDD0CC;padding:2px 8px"
-            onclick="deleteExaminer(${idx})"><i class="ti ti-trash" style="font-size:12px"></i></button>
-        </td>
+        ${actionCells}
       </tr>`;
     }).join('');
+  // 상태변경 컬럼 헤더는 수정 모드일 때만 표시
+  const thStatusEdit = $('th-examiner-status-edit');
+  if (thStatusEdit) thStatusEdit.style.display = (examinerEditIdx!==null) ? '' : 'none';
   // 심사관 datalist 갱신
   updateExaminerDatalist();
 }
@@ -2312,7 +2673,7 @@ function resetExaminer() {
   if($('examiner-type'))   $('examiner-type').value='전체';
   if($('examiner-code'))   $('examiner-code').value='전체';
   if($('examiner-role'))   $('examiner-role').value='전체';
-  if($('examiner-status')) $('examiner-status').value='전체';
+  if($('examiner-status')) $('examiner-status').value='활동중';
   if($('examiner-search-empid')) $('examiner-search-empid').value='';
   if($('examiner-search-name'))  $('examiner-search-name').value='';
   renderExaminer();
@@ -2538,6 +2899,7 @@ function setupRealtimeSync() {
 loadFromStorage().then(async ()=>{
   await loadCrewFromCloud();
   await loadExaminerFromCloud();
+  if (typeof loadFlycoFromCloud==='function') await loadFlycoFromCloud();
   if (typeof syncExpiredExaminersFromDB==='function') {
     const added = syncExpiredExaminersFromDB();
     if (added>0) { renderExaminer(); saveExaminerToCloud(); }
@@ -2861,6 +3223,10 @@ openExaminerDrawer = function() {
           <input class="form-control" id="ex-empid" placeholder="예) T180451"></div>
         <div class="form-group full"><label class="form-label">이름</label>
           <input class="form-control" id="ex-name" placeholder="심사관 이름"></div>
+        <div class="form-group full"><label class="form-label">영문명 <span style="font-weight:400;color:var(--muted)">(심사기록부 PDF 서명란과 매칭용, 예: CHOI TONG LYEOL)</span></label>
+          <input class="form-control" id="ex-eng-name" placeholder="예) CHOI TONG LYEOL" style="text-transform:uppercase"></div>
+        <div class="form-group full"><label class="form-label">심사관코드 <span style="font-weight:400;color:var(--muted)">(국토부 제출용, 예: DCP1717)</span></label>
+          <input class="form-control" id="ex-code" placeholder="예) DCP1717"></div>
         <div class="form-group"><label class="form-label">위촉 시작일</label>
           <input class="form-control" id="ex-period-start" type="date"></div>
         <div class="form-group"><label class="form-label">위촉 종료일</label>
@@ -2982,7 +3348,8 @@ savePlanRow = function() {
     simline:g('fm-simline'),ac:g('fm-ac'),type,subtype:g('fm-subtype'),process,
     date, dateKnow: isInjung?dateKnow:'', dateSkill: isInjung?dateSkill:'',
     flight:g('fm-flight')||'—',examiner:g('fm-examiner')||'—',
-    place:g('fm-place')||'—',note:g('fm-note')
+    place:g('fm-place')||'—',note:g('fm-note'),
+    nationality: g('fm-nationality')||'내국인'
   };
   if(!common.simline||!common.ac||!common.type||!date){alert('SIM/LINE, 기종, 심사종류, 심사일정은 필수입니다.');return;}
 
@@ -3045,6 +3412,7 @@ function editPlanRow(id) {
   $('fm-examiner').value = (row.examiner&&row.examiner!=='—')?row.examiner:'';
   $('fm-place').value = (row.place&&row.place!=='—')?row.place:'';
   $('fm-note').value = row.note||'';
+  if($('fm-nationality')) $('fm-nationality').value = row.nationality||'내국인';
   updateExaminerDatalistByContext();
 
   $('fm-edit-id').value = String(id);
@@ -3472,6 +3840,584 @@ async function ensureXLSXLoaded() {
     await new Promise(res=>s.onload=res);
   }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 심사결과분석 (Trinity 체크폼 PDF + 국토부 공식서식 자동 파싱)
+// ══════════════════════════════════════════════════════════════════
+let flycoDB = []; // 업로드된 심사기록 목록 (기량 체크만 — 지식/KNOWLEDGE 체크는 제외)
+let flycoFiles = {}; // 원본 PDF 파일 (filename -> base64 dataURL), 다운로드 버튼용
+
+async function ensurePDFJSLoaded() {
+  if (window.pdfjsLib) return;
+  await new Promise(res=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload=res;
+    document.head.appendChild(s);
+  });
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+async function extractPdfText(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  let text = '';
+  for (let i=1; i<=pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // pdf.js는 아이템을 x좌표 순서로 안 주는 경우가 있어 y좌표 기준으로 줄을 묶어 재구성
+    const lines = {};
+    content.items.forEach(it=>{
+      const y = Math.round(it.transform[5]);
+      if(!lines[y]) lines[y]=[];
+      lines[y].push({x:it.transform[4], str:it.str});
+    });
+    const ys = Object.keys(lines).map(Number).sort((a,b)=>b-a);
+    ys.forEach(y=>{
+      const row = lines[y].sort((a,b)=>a.x-b.x).map(it=>it.str).join(' ');
+      text += row + '\n';
+    });
+  }
+  return text;
+}
+
+function fileToDataURL(file) {
+  return new Promise((resolve,reject)=>{
+    const r = new FileReader();
+    r.onload = ()=>resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+// CHECK-TYPE(INITIAL/UPGRADE/TRANSITION/RECURRENT/REQUALIFICATION) → 심사종류/세부구분 매핑
+function mapCheckTypeToSubtype(t) {
+  const s=(t||'').toUpperCase();
+  if (s.includes('INITIAL')) return {type:'인정', subtype:'최초_초기'};
+  if (s.includes('UPGRADE')) return {type:'인정', subtype:'승격'};
+  if (s.includes('TRANSITION')) return {type:'인정', subtype:'전환'};
+  if (s.includes('REQUALIFICATION')) return {type:'인정', subtype:'재자격'};
+  if (s.includes('RECURRENT')) return {type:'정기', subtype:'정기'};
+  return {type:'', subtype:''};
+}
+function dutyCodeToQual(code) {
+  const c=(code||'').toUpperCase();
+  if (c==='C') return '기장';
+  if (c==='F') return '부기장';
+  if (c==='TF') return '훈련부기장';
+  if (c==='TC') return '훈련기장';
+  return '';
+}
+
+// 한 PDF 파일을 파싱해서 record 배열로 반환 (한 파일에 지식+기량 등 여러 체크가 함께 들어있을 수 있음)
+// ⚠ 실제 심사기록부 PDF 5종(지식/LINE/SIM지식/FFS Checkride/국토부공식서식) 샘플로 검증된 로직
+function parseFlycoText(text, filename) {
+  const records = [];
+  // ── 텍스트를 "체크 블록" 단위로 분리 (각 블록은 하나의 CHECK 문서 = 한 페이지 세트) ──
+  const blocks = text.split(/(?=Page 1\/\d+)/).filter(b=>b.trim());
+  blocks.forEach(block=>{
+    const titleLine = block.split('\n').slice(0,3).join(' ');
+    const isKnowledge = /CHECK\s*-\s*KNOWLEDGE|SIM KNOWLEDGE CHECK/i.test(block);
+    const isTrinityLine = /\(A?\d*\)?\s*CHECK\s*-\s*LINE/i.test(block) && !isKnowledge;
+    const isTrinitySim = /FFS/i.test(titleLine) && !isKnowledge && !isTrinityLine;
+    const isOfficial = /운\s*항\s*자\s*격\s*심\s*사\s*표|기량심사표/i.test(block);
+
+    if (!isKnowledge && !isTrinityLine && !isTrinitySim && !isOfficial) return; // 인식 안 되는 블록은 무시
+
+    const rec = {
+      id: 'flyco_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+      filename, source: isOfficial?'국토부서식':'Trinity',
+      process: isKnowledge?'지식':'기량',
+      ac:'', simline:'', type:'', subtype:'', qual:'', empid:'', name:'',
+      date:'', score:'', result:'', examiner:'', note:'', needsReview:false,
+      itemDist: null, itemTotal: 0
+    };
+
+    // 기종 (제목 괄호 → A/C Type 필드 → 본문 어디든 A330/B737/B777)
+    const acM = block.match(/\((A330|B737|B777)\)/) || block.match(/A\/C Type\s+(A330|B737|B777)/) || block.match(/\b(A330|B737|B777)\b/);
+    rec.ac = acM ? acM[1] : '';
+
+    // 항공기(LINE)/SIM
+    if (isTrinitySim) rec.simline='SIM';
+    else if (isKnowledge) rec.simline = /SIM/i.test(titleLine) ? 'SIM' : 'LINE';
+    else if (isTrinityLine) rec.simline='LINE';
+    else if (isOfficial) rec.simline = /SIM/i.test(block) && !/고정익항공기/.test(block) ? 'SIM' : 'LINE';
+
+    // 자격: Trainee Role / 국토부 체크박스(■ CAP,F/O) / Duty code / 제목의 <CAPT> 표기
+    const roleM = block.match(/Trainee Role\s+(기장|부기장|훈련부기장)/) || block.match(/■\s*(CAP|F\/O)/);
+    if (roleM) rec.qual = roleM[1]==='CAP' ? '기장' : roleM[1]==='F/O' ? '부기장' : roleM[1].replace('훈련','');
+    if (!rec.qual) { const dutyM = block.match(/Duty code\s+(\w+)/); if (dutyM) rec.qual = dutyCodeToQual(dutyM[1]); }
+    if (!rec.qual && /<CAPT>/i.test(titleLine)) rec.qual='기장';
+    if (!rec.qual && /<F\/O>/i.test(titleLine)) rec.qual='부기장';
+
+    // 심사일 (ISO 형식 우선, DD/MM/YYYY·YYYY.MM.DD 폴백)
+    const dateIso = block.match(/CHECK\s*-\s*DATE\s+(\d{4}-\d{2}-\d{2})/) || block.match(/(\d{4}-\d{2}-\d{2})/);
+    const dateSlash = block.match(/Date\s+(\d{2})\/(\d{2})\/(\d{4})/); // 국내 서식 관례: DD/MM/YYYY
+    const dateDot = block.match(/(\d{4})[.\s]\s*(\d{1,2})[.\s]\s*(\d{1,2})/);
+    if (dateIso) rec.date = dateIso[1];
+    else if (dateSlash) rec.date = `${dateSlash[3]}-${dateSlash[2]}-${dateSlash[1]}`;
+    else if (dateDot) rec.date = `${dateDot[1]}-${String(dateDot[2]).padStart(2,'0')}-${String(dateDot[3]).padStart(2,'0')}`;
+
+    // 심사종류/세부구분: 문서 제목 우선 → CHECK-TYPE 필드 → 본문 스캔
+    const titleTypeM = titleLine.match(/Initial|Transition|Upgrade|Requalification|Recurrent/i);
+    if (titleTypeM) { const m=mapCheckTypeToSubtype(titleTypeM[0]); rec.type=m.type; rec.subtype=m.subtype; }
+    if (!rec.type) {
+      const typeM = block.match(/CHECK\s*-\s*TYPE\s+(INITIAL|UPGRADE|TRANSITION|RECURRENT|REQUALIFICATION)/i);
+      if (typeM) { const m=mapCheckTypeToSubtype(typeM[1]); rec.type=m.type; rec.subtype=m.subtype; }
+    }
+    if (!rec.type) {
+      if (/수시/.test(block)) { rec.type='수시'; rec.subtype='수시'; }
+      else if (/Recurrent/i.test(block)) { rec.type='정기'; rec.subtype='정기'; }
+      else if (/Initial|Transition|Upgrade/i.test(block)) { rec.type='인정'; rec.subtype='최초_초기'; }
+    }
+
+    // 이름/사번 (PILOT SIGNATURE 줄 또는 Name of Pilot / Trainee Name)
+    const pilotM = block.match(/PILOT SIGNATURE[\s\S]{0,90}?([A-Z][A-Z .]+?)\s*\((T\d+)\)/)
+      || block.match(/Trainee Name\/ID\s+([A-Z .]+?)(?:\s{2,}|\n)/);
+    if (pilotM) { rec.name = pilotM[1].trim(); rec.empid = pilotM[2]||''; }
+    if (!rec.name) {
+      const nameM = block.match(/Name of Pilot\s+([^\n]+?)\s+(?:Flight No|$)/);
+      if (nameM) rec.name = nameM[1].trim();
+    }
+
+    // 심사관
+    const examinerM = block.match(/INSTRUCTOR SIGNATURE[\s\S]{0,60}?\(T\d+\)\s+([A-Z][A-Z .]+?)\s*\((T\d+)\)/)
+      || block.match(/Checker'?s name\s+([^\n]+)/);
+    if (examinerM) rec.examiner = (examinerM[1]||'').trim();
+
+    // 점수(총점)/결과 + 항목별 1~5점 분포 (Trinity 기량체크만 — 국토부 서식은 S/U라 해당 없음)
+    if (isKnowledge) {
+      const totalM = block.match(/Total Grade\s+(\d+)/);
+      rec.score = totalM ? totalM[1] : '';
+      const resM = block.match(/Overall Grade\s+(PASS|FAIL)/i);
+      rec.result = resM ? (resM[1].toUpperCase()==='PASS'?'합격':'불합격') : '';
+    } else if (isOfficial) {
+      rec.result = /■\s*Satisfactory/.test(block) ? '합격' : (/■\s*Unsatisfactory/.test(block) ? '불합격' : '');
+      rec.score = ''; // 국토부 서식은 1~5점 없음
+    } else {
+      const avgM = block.match(/AVERAGE\s+(\d+(?:\.\d+)?)/);
+      rec.score = avgM ? String(Math.round(parseFloat(avgM[1]))) : '';
+      const resM = block.match(/RESULT\s+(PASS|FAIL)/i);
+      rec.result = resM ? (resM[1].toUpperCase()==='PASS'?'합격':'불합격') : '';
+      // 항목별(TRY/GRADE) 표에서 1~5점 개수 집계
+      // ⚠ PC/FFS 템플릿은 "1.3.1  1  4"처럼 설명 없이 번호만 있는 줄이 많아 설명부를 선택적으로 처리
+      const itemMatches = [...block.matchAll(/^\d+(?:\.\d+)*\s+(?:.*?\s)?(\d)\s+(N\/A|\d)\s*$/gm)];
+      const dist = {1:0,2:0,3:0,4:0,5:0};
+      let total = 0;
+      itemMatches.forEach(m=>{
+        const g = m[2];
+        if (g!=='N/A') { const gv=+g; if(gv>=1&&gv<=5){ dist[gv]++; total++; } }
+      });
+      if (total>0) { rec.itemDist = dist; rec.itemTotal = total; }
+    }
+    records.push(rec);
+  });
+
+  // 같은 파일 내 "기량" 레코드에 심사종류가 비어있으면, 같은 사번의 "지식" 레코드에서 상속
+  // (LINE Check 등 일부 양식은 CHECK-TYPE을 따로 안 주고 지식 체크와 세션을 공유함)
+  records.forEach(r=>{
+    if (r.process==='기량' && !r.type) {
+      const sib = records.find(s=>s.process==='지식' && s.empid && s.empid===r.empid);
+      if (sib) { r.type=sib.type; r.subtype=sib.subtype; }
+    }
+  });
+  // 파싱 신뢰도 체크 — 핵심 필드가 비어있으면 "검토 필요" 표시
+  records.forEach(r=>{
+    r.needsReview = !r.ac || !r.name || !r.date || !r.result || (r.source==='Trinity' && r.process==='기량' && !r.score);
+  });
+  // 심사결과분석은 기량(마뉴버 체크) 결과만 다루므로, 지식(KNOWLEDGE) 체크는 세션 정보 상속에만 쓰고 최종 목록에서는 제외
+  return records.filter(r=>r.process==='기량');
+}
+
+// PDF 서명란은 영문 로마자로만 나오는 경우가 많아, 운항승무원 현황(crewDB)·심사관 관리(examinerDB)와
+// 사번/영문명 기준으로 매칭해서 정식 한글 이름·최신 자격으로 교정
+function resolveFlycoIdentities(recs) {
+  const crewByEmpid = {};
+  (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewByEmpid[c.empid]=c; });
+  const examinerByEng = {};
+  (typeof examinerDB!=='undefined'?examinerDB:[]).forEach(e=>{ if(e.engName) examinerByEng[e.engName.toUpperCase().trim()]=e; });
+  recs.forEach(r=>{
+    // 피심사자: 사번으로 정확히 매칭 가능 (PDF에 사번이 있는 경우)
+    if (r.empid && crewByEmpid[r.empid]) {
+      const c = crewByEmpid[r.empid];
+      r.name = c.name || r.name;
+      if (c.qual) r.qual = c.qual; // 운항승무원 현황의 최신 자격을 우선
+      r.matchedCrew = true;
+    } else {
+      r.matchedCrew = false;
+    }
+    // 심사관: 심사관 관리에 등록된 "영문명"과 매칭 (없으면 PDF의 로마자 이름 그대로 둠)
+    const examMatch = examinerByEng[(r.examiner||'').toUpperCase().trim()];
+    if (examMatch) {
+      r.examiner = examMatch.name;
+      r.examinerEmpid = examMatch.empid || '';
+      r.matchedExaminer = true;
+    } else {
+      r.matchedExaminer = false;
+    }
+  });
+}
+
+async function processFlycoFiles(fileList) {
+  const files = Array.from(fileList||[]).filter(f=>f && f.name.toLowerCase().endsWith('.pdf'));
+  if (!files.length) return;
+  await ensurePDFJSLoaded();
+  const st=$('flyco-upload-status');
+  let added=0, failed=0;
+  const allNewRecs = [];
+  for (const f of files) {
+    try {
+      const text = await extractPdfText(f);
+      const recs = parseFlycoText(text, f.name);
+      if (!recs.length) { failed++; continue; }
+      flycoFiles[f.name] = await fileToDataURL(f);
+      allNewRecs.push(...recs);
+      added += recs.length;
+    } catch(e) { console.warn('PDF 파싱 실패', f.name, e); failed++; }
+  }
+  resolveFlycoIdentities(allNewRecs);
+  flycoDB.push(...allNewRecs);
+  if (st) {
+    st.style.display='block';
+    const unmatchedExaminers = allNewRecs.filter(r=>!r.matchedExaminer).length;
+    st.textContent = `✅ 파일 ${files.length}개 처리 · 심사기록 ${added}건 추출` + (failed?` · ⚠ ${failed}개 파일은 인식 실패(수동 확인 필요)`:'')
+      + (unmatchedExaminers?` · 심사관 ${unmatchedExaminers}건은 영문명 매칭 실패(심사관 관리에서 영문명 등록하면 자동 매칭돼요)`:'');
+  }
+  renderFlyco();
+  saveFlycoToCloud();
+}
+
+function resetFlycoFilter() {
+  ['flyco-ac','flyco-simline','flyco-type','flyco-qual','flyco-result'].forEach(id=>{ if($(id)) $(id).value='전체'; });
+  renderFlyco();
+}
+function clearFlycoAll() {
+  if (!confirm(`업로드된 심사결과분석 데이터 ${flycoDB.length}건을 전부 삭제할까요?`)) return;
+  flycoDB.splice(0, flycoDB.length);
+  flycoFiles = {};
+  renderFlyco();
+  saveFlycoToCloud();
+}
+function deleteFlycoRow(id) {
+  const idx = flycoDB.findIndex(r=>r.id===id);
+  if (idx>-1) flycoDB.splice(idx,1);
+  renderFlyco();
+  saveFlycoToCloud();
+}
+function downloadFlycoFile(filename) {
+  const dataUrl = flycoFiles[filename];
+  if (!dataUrl) { alert('원본 파일을 찾을 수 없어요 (새로고침 이후 파일 데이터가 아직 동기화되지 않았을 수 있어요).'); return; }
+  const a = Object.assign(document.createElement('a'), {href:dataUrl, download:filename});
+  a.click();
+}
+
+// ── 심사결과분석 수정 모달 (심사계획 관리와 동일한 패턴: 표는 컴팩트하게, 수정은 팝업으로) ──
+function openFlycoEditModal(id) {
+  const r = flycoDB.find(r=>r.id===id); if(!r) return;
+  $('flyco-edit-id').value = id;
+  $('flyco-edit-ac').value = r.ac||'';
+  $('flyco-edit-simline').value = r.simline||'LINE';
+  $('flyco-edit-type').value = r.type||'';
+  $('flyco-edit-qual').value = r.qual||'';
+  $('flyco-edit-empid').value = r.empid||'';
+  $('flyco-edit-name').value = r.name||'';
+  $('flyco-edit-date').value = r.date||'';
+  $('flyco-edit-score').value = r.score||'';
+  $('flyco-edit-result').value = r.result||'';
+  $('flyco-edit-examiner').value = r.examiner||'';
+  $('flyco-edit-modal').classList.add('open');
+}
+function closeFlycoEditModal() { $('flyco-edit-modal').classList.remove('open'); }
+function saveFlycoEdit() {
+  const id = $('flyco-edit-id').value;
+  const r = flycoDB.find(r=>r.id===id); if(!r) return;
+  const g=eid=>$(eid).value.trim();
+  r.ac=g('flyco-edit-ac'); r.simline=g('flyco-edit-simline'); r.type=g('flyco-edit-type');
+  r.qual=g('flyco-edit-qual'); r.empid=g('flyco-edit-empid'); r.name=g('flyco-edit-name');
+  r.date=g('flyco-edit-date'); r.score=g('flyco-edit-score'); r.result=g('flyco-edit-result'); r.examiner=g('flyco-edit-examiner');
+  r.needsReview = !r.ac || !r.name || !r.date || !r.result;
+  closeFlycoEditModal();
+  renderFlyco();
+  saveFlycoToCloud();
+}
+
+function renderFlyco() {
+  // 운항승무원 현황·심사관 관리가 나중에 갱신돼도 항상 최신 이름/자격이 반영되도록 매 렌더마다 재매칭
+  resolveFlycoIdentities(flycoDB);
+  const acSel = $('flyco-ac');
+  if (acSel && acSel.dataset.filled!=='1') {
+    acSel.innerHTML = '<option value="전체">전체</option>' + ALL_AC.filter(a=>a!=='전체').map(a=>`<option>${a}</option>`).join('');
+    acSel.dataset.filled='1';
+  }
+  const ac = $('flyco-ac')?.value||'전체';
+  const sl = $('flyco-simline')?.value||'전체';
+  const typeF = $('flyco-type')?.value||'전체';
+  const qualF = $('flyco-qual')?.value||'전체';
+  const resultF = $('flyco-result')?.value||'전체';
+  const rows = flycoDB.filter(r=>
+    (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) &&
+    (typeF==='전체'||r.type===typeF) && (qualF==='전체'||r.qual===qualF) &&
+    (resultF==='전체'||r.result===resultF)
+  );
+
+  $('flyco-val-total').textContent = flycoDB.length;
+  $('flyco-val-scored').textContent = flycoDB.filter(r=>r.source==='Trinity'&&r.score).length;
+  $('flyco-val-official').textContent = flycoDB.filter(r=>r.source==='국토부서식').length;
+  $('flyco-val-fail').textContent = flycoDB.filter(r=>r.result==='불합격').length;
+  $('flyco-val-review').textContent = flycoDB.filter(r=>r.needsReview).length;
+
+  $('flyco-tbody').innerHTML = rows.length===0
+    ? `<tr><td colspan="11" class="empty-state">업로드된 심사기록이 없습니다. 위에서 PDF를 올려주세요.</td></tr>`
+    : rows.map(r=>{
+        const resCls = r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
+        const rowStyle = r.needsReview ? 'background:#FEF8EC' : '';
+        const scoreDisp = r.score
+          ? `<b>${r.score}${r.source==='Trinity'?'점':''}</b>` + (r.itemDist ? `<div style="font-size:9px;color:var(--muted);white-space:nowrap">1점${r.itemDist[1]}·2점${r.itemDist[2]}·3점${r.itemDist[3]}·4점${r.itemDist[4]}·5점${r.itemDist[5]} (${r.itemTotal}개항목)</div>` : '')
+          : '—';
+        return `<tr style="${rowStyle}" title="${r.needsReview?'일부 항목이 비어있어요 — 수정 버튼으로 확인해주세요':''}">
+        <td>${r.ac?acDot(r.ac):'—'}</td>
+        <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline==='SIM'?'SIM':'항공기'}</span></td>
+        <td>${r.type||'—'}</td>
+        <td>${r.qual||'—'}</td>
+        <td>${r.empid||'—'}</td>
+        <td style="font-weight:600">${r.name||'—'}${r.matchedCrew?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="운항승무원 현황과 매칭됨"></i>':''}</td>
+        <td>${r.date||'—'}</td>
+        <td style="line-height:1.3">${scoreDisp}</td>
+        <td class="center"><span class="badge-tag ${resCls}">${r.result||'—'}</span></td>
+        <td>${r.examiner||'—'}${r.matchedExaminer?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="심사관 관리와 매칭됨"></i>':''}</td>
+        <td class="center" style="white-space:nowrap">
+          <button class="btn btn-sm" style="background:#F0EDF8;color:#5A4080;border:1px solid #D8CEEC;padding:2px 6px" title="원본 PDF 다운로드" onclick="downloadFlycoFile('${r.filename.replace(/'/g,"\\'")}')"><i class="ti ti-download" style="font-size:12px"></i></button>
+          <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 6px" title="수정" onclick="openFlycoEditModal('${r.id}')"><i class="ti ti-edit" style="font-size:12px"></i></button>
+          <button class="btn btn-sm" style="background:#FEF0EE;color:var(--fail);border:1px solid #EDD0CC;padding:2px 6px" title="삭제" onclick="deleteFlycoRow('${r.id}')"><i class="ti ti-trash" style="font-size:12px"></i></button>
+        </td>
+      </tr>`;
+      }).join('');
+
+  drawFlycoCharts();
+  if ($('flyco-fail-card').style.display!=='none') renderFlycoFailList();
+}
+
+function computeFlycoScoreTable(simline) {
+  const types=['인정','정기','수시'], quals=['기장','부기장'];
+  const table = {};
+  types.forEach(t=>{ table[t]={}; quals.forEach(q=>{ table[t][q]=[0,0,0,0,0]; }); });
+  flycoDB.filter(r=>r.source==='Trinity'&&r.simline===simline&&r.score&&types.includes(r.type)&&quals.includes(r.qual))
+    .forEach(r=>{
+      const s = Math.min(5,Math.max(1,parseInt(r.score)));
+      table[r.type][r.qual][s-1]++;
+    });
+  return table;
+}
+// 인정심사 세부구분(초기/승격/전환/재자격)별 집계 — 원본 리포트의 "1-1/2-1" 서브테이블용
+function computeFlycoSubtypeTable(simline) {
+  const subtypes=['최초_초기','승격','전환','재자격'];
+  const table = {}; subtypes.forEach(s=>{ table[s]=[0,0,0,0,0]; });
+  flycoDB.filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type==='인정'&&r.score&&subtypes.includes(r.subtype))
+    .forEach(r=>{ const s=Math.min(5,Math.max(1,parseInt(r.score))); table[r.subtype][s-1]++; });
+  return table;
+}
+function drawFlycoCharts() {
+  ['LINE','SIM'].forEach(sl=>{
+    const t = computeFlycoScoreTable(sl);
+    const labels=['1점','2점','3점','4점','5점'];
+    const datasets=[];
+    const colors={'인정':'rgba(88,101,163,.75)','정기':'rgba(106,155,112,.75)','수시':'rgba(196,140,90,.75)'};
+    Object.keys(t).forEach(type=>{
+      const sum=[0,0,0,0,0];
+      Object.values(t[type]).forEach(arr=>arr.forEach((v,i)=>sum[i]+=v));
+      datasets.push({label:type, data:sum, backgroundColor:colors[type], borderRadius:4});
+    });
+    const chartId = `chart-flyco-${sl.toLowerCase()}`;
+    updateChart(chartId, 'bar', labels, datasets,
+      {scales:{x:{grid:{display:false}},y:{grid:{color:'#F0EAE4'},ticks:{stepSize:1}}}});
+    // 더블클릭 시 해당 점수/심사종류의 인원 명단 드릴다운 (canvas는 재사용되므로 리스너는 한 번만 부착)
+    // ⚠ 화면 확대(zoom) 때문에 Chart.js 기본 히트테스트가 좌표를 잘못 잡으므로,
+    //    getBoundingClientRect 비율로 캔버스 내부 좌표를 직접 환산해서 막대를 찾는다.
+    const canvas = $(chartId);
+    if (canvas && !canvas.dataset.dblclickBound) {
+      canvas.dataset.dblclickBound = '1';
+      canvas.addEventListener('dblclick', (evt)=>{
+        const chart = chartInstances[chartId]; if(!chart) return;
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const px = (evt.clientX - rect.left) / rect.width  * chart.width;
+        const py = (evt.clientY - rect.top)  / rect.height * chart.height;
+        let hit = null;
+        for (let di=0; di<chart.data.datasets.length; di++) {
+          const meta = chart.getDatasetMeta(di);
+          if (meta.hidden) continue;
+          for (let i=0; i<meta.data.length; i++) {
+            const el = meta.data[i];
+            const halfW = (el.width||8)/2;
+            const top = Math.min(el.y, el.base), bottom = Math.max(el.y, el.base);
+            if (px >= el.x-halfW && px <= el.x+halfW && py >= top-6 && py <= bottom+6) { hit={di,i}; break; }
+          }
+          if (hit) break;
+        }
+        // 막대를 정확히 못 짚었으면, x축상 가장 가까운 막대로 폴백
+        if (!hit) {
+          let best=null, bestDist=Infinity;
+          for (let di=0; di<chart.data.datasets.length; di++) {
+            const meta = chart.getDatasetMeta(di);
+            for (let i=0; i<meta.data.length; i++) {
+              const el = meta.data[i];
+              const d = Math.abs(px - el.x);
+              if (d < bestDist && d < 24) { bestDist=d; best={di,i}; }
+            }
+          }
+          hit = best;
+        }
+        if (!hit) return;
+        const type = chart.data.datasets[hit.di].label;
+        const score = hit.i + 1;
+        showFlycoDrilldown(sl, type, score);
+      });
+      canvas.style.cursor='pointer';
+    }
+  });
+}
+function showFlycoDrilldown(simline, type, score) {
+  const list = flycoDB.filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.score&&parseInt(r.score)===score);
+  $('flyco-drill-title').textContent = `${simline==='SIM'?'SIM':'항공기'} · ${type} · ${score}점 (${list.length}명)`;
+  $('flyco-drill-tbody').innerHTML = list.length===0
+    ? `<tr><td colspan="4" class="empty-state">해당 조건의 인원이 없습니다</td></tr>`
+    : list.map(r=>`<tr><td style="font-weight:600">${r.name||'—'}</td><td>${r.empid||'—'}</td><td>${r.qual||'—'}</td><td>${r.ac?acDot(r.ac):'—'}</td></tr>`).join('');
+  $('flyco-drill-modal').classList.add('open');
+}
+function closeFlycoDrillModal() { $('flyco-drill-modal').classList.remove('open'); }
+
+function renderFlycoFailList() {
+  const card = $('flyco-fail-card'); if(card) card.style.display='block';
+  const rows = flycoDB.filter(r=>r.result==='불합격');
+  $('flyco-fail-tbody').innerHTML = rows.length===0
+    ? `<tr><td colspan="10" class="empty-state">불합격 건이 없습니다</td></tr>`
+    : rows.map(r=>`<tr>
+        <td>${r.simline==='SIM'?'SIM':'항공기'}</td><td>${r.date}</td><td>${r.ac}</td><td>${r.qual}</td>
+        <td>${r.type}${r.subtype?'('+r.subtype+')':''}</td><td>${r.name}</td><td>${r.examiner}</td>
+        <td><input class="filter-input" style="width:140px;font-size:11px" placeholder="총평 회신 후 입력" value="${r.note1||''}" onchange="updateFlycoField('${r.id}','note1',this.value)"></td>
+        <td><input class="filter-input" style="width:140px;font-size:11px" placeholder="조치내용 입력" value="${r.note2||''}" onchange="updateFlycoField('${r.id}','note2',this.value)"></td>
+        <td><span class="badge-tag tag-fail">불합격</span></td>
+      </tr>`).join('');
+  card.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function updateFlycoField(id, field, val) {
+  const r = flycoDB.find(r=>r.id===id); if(!r) return;
+  r[field] = val;
+  saveFlycoToCloud();
+}
+
+// ── 차트 다운로드: PDF(이미지 캡처) / 엑셀(집계 데이터) ──
+async function exportFlycoChartsPDF(evt) {
+  await exportElementAsPDF('flyco-chart-section', `심사결과분석_점수분포차트_${new Date().getFullYear()}년${new Date().getMonth()+1}월`, evt, {orientation:'landscape'});
+}
+function exportFlycoChartsExcel() {
+  const headers = ['항공기/SIM','심사종류','자격','1점','2점','3점','4점','5점','합계'];
+  const rows = [];
+  ['LINE','SIM'].forEach(sl=>{
+    const t = computeFlycoScoreTable(sl);
+    ['인정','정기','수시'].forEach(type=>{
+      ['기장','부기장'].forEach(q=>{
+        const arr=t[type][q];
+        rows.push([sl==='SIM'?'SIM':'항공기', type, q, ...arr, arr.reduce((a,b)=>a+b,0)]);
+      });
+    });
+  });
+  exportCSV(headers, rows, `심사결과분석_점수분포데이터_${new Date().getFullYear()}년${new Date().getMonth()+1}월.csv`);
+}
+
+// ── 원본 "심사결과분석.xlsx"와 동일한 구조(1.항공기/1-1인정심사/2.SIM/2-1기량심사 + 불합격 사항)로 xlsx 생성 ──
+async function exportFlycoAnalysis() {
+  await ensureXLSXLoaded();
+  if (!flycoDB.length) { alert('업로드된 데이터가 없습니다.'); return; }
+
+  function scoreBlockAOA(startRow, title, simline, byQual) {
+    // byQual=true: 심사종류×자격구분(기장/부기장) 표 / false: 인정심사 세부구분(초기/승격/전환/재자격) 표
+    const aoa = [];
+    aoa.push([title]);
+    aoa.push(['구분','','심사결과 배점']);
+    aoa.push([byQual?'심사종류':'심사종류', byQual?'자격구분':'심사구분', '1점','','2점','','3점','','4점','','5점','','총계','']);
+    aoa.push(['','','횟수','비율','횟수','비율','횟수','비율','횟수','비율','횟수','비율','횟수','비율']);
+    const pct=(v,sum)=>sum?Math.round(v/sum*100)+'%':0;
+    if (byQual) {
+      const t = computeFlycoScoreTable(simline);
+      ['인정','정기','수시'].forEach(type=>{
+        const sub=[0,0,0,0,0];
+        ['기장','부기장'].forEach(q=>{
+          const arr=t[type][q], sum=arr.reduce((a,b)=>a+b,0);
+          aoa.push([type,q,arr[0],pct(arr[0],sum),arr[1],pct(arr[1],sum),arr[2],pct(arr[2],sum),arr[3],pct(arr[3],sum),arr[4],pct(arr[4],sum),sum,sum?'100%':0]);
+          sub.forEach((_,i)=>sub[i]+=arr[i]);
+        });
+        const subSum=sub.reduce((a,b)=>a+b,0);
+        aoa.push(['','소계',sub[0],'',sub[1],'',sub[2],'',sub[3],'',sub[4],'',subSum,'']);
+      });
+      const total=[0,0,0,0,0];
+      ['인정','정기','수시'].forEach(type=>['기장','부기장'].forEach(q=>t[type][q].forEach((v,i)=>total[i]+=v)));
+      const totalSum=total.reduce((a,b)=>a+b,0);
+      aoa.push(['총계','',total[0],pct(total[0],totalSum),total[1],pct(total[1],totalSum),total[2],pct(total[2],totalSum),total[3],pct(total[3],totalSum),total[4],pct(total[4],totalSum),totalSum,totalSum?'100%':0]);
+    } else {
+      const t = computeFlycoSubtypeTable(simline);
+      const labelMap={'최초_초기':'초기','승격':'승격','전환':'전환','재자격':'재자격'};
+      const sub=[0,0,0,0,0];
+      Object.entries(t).forEach(([st,arr])=>{
+        const sum=arr.reduce((a,b)=>a+b,0);
+        aoa.push(['인정',labelMap[st]||st,arr[0],pct(arr[0],sum),arr[1],pct(arr[1],sum),arr[2],pct(arr[2],sum),arr[3],pct(arr[3],sum),arr[4],pct(arr[4],sum),sum,sum?'100%':0]);
+        arr.forEach((v,i)=>sub[i]+=v);
+      });
+      const subSum=sub.reduce((a,b)=>a+b,0);
+      aoa.push(['','소계',sub[0],'',sub[1],'',sub[2],'',sub[3],'',sub[4],'',subSum,'']);
+    }
+    return aoa;
+  }
+
+  const aoa1 = [
+    ['1. 월간 심사결과 분석'], [],
+    ...scoreBlockAOA(0,'1.항공기','LINE',true), [],
+    ['1-1 인정심사(노선)'], ...scoreBlockAOA(0,'','LINE',false).slice(1), [],
+    ['2. 모의비행훈련장치(SIM)'], ...scoreBlockAOA(0,'','SIM',true).slice(1), [],
+    ['2-1 기량심사(초기)'], ...scoreBlockAOA(0,'','SIM',false).slice(1),
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa1);
+  ws1['!cols'] = [{wch:11},{wch:9},{wch:9},{wch:7},{wch:7},{wch:9},{wch:7},{wch:9},{wch:7},{wch:9},{wch:7},{wch:9},{wch:7},{wch:11}];
+
+  const failRows = flycoDB.filter(r=>r.result==='불합격');
+  const aoa2 = [['2. 불합격 사항'],[],
+    ['구분','일자','기종','직급','심사구분','이름','심사관','주요지적사항','조치내용','결과'],
+    ...failRows.map(r=>[r.simline==='SIM'?'SIM':'항공기', r.date, r.ac, r.qual, `${r.type}${r.subtype?'('+r.subtype+')':''}`, r.name, r.examiner, r.note1||'', r.note2||'', '불합격'])
+  ];
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws1, '1.월간심사결과분석');
+  XLSX.utils.book_append_sheet(wb, ws2, '2.불합격 사항');
+  const now = new Date();
+  XLSX.writeFile(wb, `심사결과분석_${now.getFullYear()}년_${now.getMonth()+1}월.xlsx`);
+
+  const reviewCnt = flycoDB.filter(r=>r.needsReview).length;
+  if (reviewCnt) alert(`⚠ 검토 필요 표시된 ${reviewCnt}건이 있어요. 값이 정확한지 한 번 더 확인해주세요.`);
+}
+
+// ── 클라우드 저장/불러오기 (다른 데이터와 동일한 청크 저장 방식 재사용) ──
+async function saveFlycoToCloud() {
+  try {
+    await saveChunkedDoc('flyco', JSON.stringify(flycoDB));
+    await saveChunkedDoc('flycoFiles', JSON.stringify(flycoFiles));
+  } catch(e) { console.warn('flyco cloud save failed', e); }
+}
+async function loadFlycoFromCloud() {
+  try {
+    const result = await loadChunkedDoc('flyco');
+    if (result) {
+      const parsed = JSON.parse(result.data || '[]');
+      if (parsed.length) flycoDB.splice(0, flycoDB.length, ...parsed);
+    }
+    const filesResult = await loadChunkedDoc('flycoFiles');
+    if (filesResult) {
+      const parsed = JSON.parse(filesResult.data || '{}');
+      flycoFiles = parsed || {};
+    }
+  } catch(e) { console.warn('flyco cloud load failed', e); }
+}
+
 // 신규 포맷: "인원현황조회-기종" 엑셀 (사번/이름/직급/기종전환/구분)
 //   - 구분 컬럼 예: "B737(기장)" → 기종=B737, 자격=기장
 // 구형 포맷: 사번/성명(이름)/기종/자격/소속/비고
@@ -3879,7 +4825,7 @@ function updateExRoleRequirement() {
 }
 function openExaminerModal() {
   $('ex-ac').value = (currentUser?.ac!=='전체' ? currentUser?.ac : '') || '';
-  ['ex-type','ex-role','ex-empid','ex-name','ex-period-start','ex-period-end'].forEach(id=>{const el=$(id);if(el)el.value='';});
+  ['ex-type','ex-role','ex-empid','ex-name','ex-eng-name','ex-code','ex-period-start','ex-period-end'].forEach(id=>{const el=$(id);if(el)el.value='';});
   if($('ex-sim')) $('ex-sim').value='true';
   if($('ex-line')) $('ex-line').value='true';
   if($('ex-status')) $('ex-status').value='활동중';
@@ -3897,6 +4843,8 @@ function editExaminerRow(idx) {
   $('ex-role').value = row.role||'';
   $('ex-empid').value = row.empid||'';
   $('ex-name').value = row.name||'';
+  $('ex-eng-name').value = row.engName||'';
+  $('ex-code').value = row.code||'';
   const [pStart,pEnd] = (row.period||'').split('~').map(s=>(s||'').trim());
   $('ex-period-start').value = pStart||'';
   $('ex-period-end').value = pEnd||'';
@@ -3919,7 +4867,7 @@ function saveExaminer() {
   const pStart=g('ex-period-start'), pEnd=g('ex-period-end');
   const period = (pStart||pEnd) ? `${pStart}~${pEnd}` : '—';
   const data = {
-    ac, type, role, empid:g('ex-empid')||'—', name,
+    ac, type, role, empid:g('ex-empid')||'—', name, engName:g('ex-eng-name').toUpperCase(), code:g('ex-code'),
     sim:$('ex-sim').value==='true', line:$('ex-line').value==='true',
     period, status:$('ex-status')?.value||'활동중'
   };
@@ -4535,10 +5483,11 @@ renderRecord = function() {
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
-        <td>${r.subtype||'—'}</td><td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
+        <td>${r.subtype||'—'}</td>
+        <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
+        <td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
         <td>${r.empid||'—'}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight||'—'}</td>
         <td>${r.examiner||'—'}</td><td>${r.place||'—'}</td>
-        <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
         <td class="center"><span class="badge-tag ${resCls}">${resLabel}</span></td>
         <td>${r.note||'—'}</td>
       </tr>`;
