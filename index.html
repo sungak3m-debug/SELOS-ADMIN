@@ -48,6 +48,7 @@ html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic'
 /* 확대는 사이드바를 제외한 우측 콘텐츠 영역(.main-content)에만 적용 — 사이드바는 아예 손대지 않아 원래 크기/레이아웃 그대로 유지됨 */
 .main-content{zoom:1.15}
 #page-stat{zoom:0.8696} /* 통계 페이지는 기존 크기 유지 — 차트 4개가 스크롤 없이 한 화면에 보이도록 */
+#page-flyco{zoom:0.8696} /* 심사결과분석도 동일 — 점수분포 차트가 가로 스크롤 없이 한 화면에 보이도록 */
 
 /* ── 프로필 화면 ── */
 #prof-screen{
@@ -200,11 +201,12 @@ html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic'
 
 /* ── 차트 그리드 ── */
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+/* min-width:0 이 없으면 캔버스가 그리드 칸을 밀어내 가로 스크롤이 생김 (두 차트 폭도 어긋남) */
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;min-width:0;overflow:hidden}
 .chart-card.full{grid-column:1/-1}
 .chart-title{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:2px}
 .chart-subtitle{font-size:10px;color:var(--muted);margin-bottom:14px}
-.chart-wrap{position:relative;height:180px}
+.chart-wrap{position:relative;height:180px;width:100%;min-width:0}
 .chart-wrap.tall{height:220px}
 
 /* ── 테이블 공통 ── */
@@ -231,6 +233,14 @@ html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic'
 .tag-pend{background:#F5F5F3;color:var(--muted);border:1px solid var(--border2)}
 .tag-정기{background:#EEF0F8;color:#5865A3;border:1px solid #C8CEEA}
 .tag-인정{background:#F8F0EE;color:#9A5850;border:1px solid #E8C8C4}
+/* 심사종류별 배지 색상 — 심사계획/심사결과/심사기록부/심사달력 전 페이지 동일 팔레트 */
+.tag-type-정기{background:#EEF3F8;color:#3A5F82;border:1px solid #C8D8EC}
+.tag-type-인정{background:#F8F0EE;color:#7A4840;border:1px solid #E8C8C0}
+.tag-type-특수{background:#F0EDF8;color:#5A4080;border:1px solid #D0C4EC}
+.tag-type-특별{background:#FEF8EC;color:#7A6020;border:1px solid #EADCB0}
+.tag-type-수시{background:#EEF8EE;color:#306830;border:1px solid #C0E0C0}
+.tag-type-사내{background:#F2F0ED;color:#6A5F55;border:1px solid #DCD4CC}
+.tag-type-LIP{background:#EAF6F8;color:#2A6470;border:1px solid #B8DDE4}
 .ac-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle}
 .dot-a330{background:var(--a330)}
 .dot-b737{background:var(--b737)}
@@ -343,6 +353,8 @@ select{font-family:inherit}
 .cal-ev-특수  {background:linear-gradient(135deg,#F0EDF8,#E8E3F5);color:#5A4080;border-color:#D0C4EC;border-left-color:#8A75B0}
 .cal-ev-특별  {background:linear-gradient(135deg,#FEF8EC,#FAF0D8);color:#7A6020;border-color:#EADCB0;border-left-color:#C8A840}
 .cal-ev-수시  {background:linear-gradient(135deg,#EEF8EE,#E4F3E4);color:#306830;border-color:#C0E0C0;border-left-color:#5A9A5A}
+.cal-ev-사내  {background:linear-gradient(135deg,#F5F3F0,#ECE8E3);color:#6A5F55;border-color:#DCD4CC;border-left-color:#9A8A7E}
+.cal-ev-LIP   {background:linear-gradient(135deg,#EAF6F8,#DDEFF3);color:#2A6470;border-color:#B8DDE4;border-left-color:#4A9AAA}
 .cal-ev-sim   {background:linear-gradient(135deg,#F7F3ED,#EFE7DC);color:#6A5030;border-color:#E0D0B8;border-left-color:#8A6B3A}
 
 /* ── SET 묶음 심사 ── */
@@ -538,15 +550,16 @@ select{font-family:inherit}
         </div>
         <div class="filter-bar">
           <div class="filter-item">
-            <span class="filter-label">기간</span>
-            <select class="filter-select" id="stat-period" onchange="onStatPeriodChange()"></select>
-          </div>
-          <div class="filter-divider"></div>
-          <div class="filter-item">
             <span class="filter-label">기종</span>
             <select class="filter-select" id="stat-ac" onchange="onStatAcChange()"></select>
           </div>
         </div>
+        <div class="big-month-nav">
+          <button class="big-month-nav-btn" onclick="statPeriodPrev()">‹</button>
+          <span class="big-month-nav-title" id="stat-period-title">—</span>
+          <button class="big-month-nav-btn" onclick="statPeriodNext()">›</button>
+        </div>
+        <div style="text-align:center;font-size:10.5px;color:var(--muted);margin:-6px 0 10px" id="stat-period-range"></div>
         <div class="stat-grid">
           <div class="stat-card blue">
             <div class="stat-top-border"></div>
@@ -660,7 +673,7 @@ select{font-family:inherit}
           </div>
           <table class="tbl">
             <thead><tr>
-              <th>No</th><th>기종</th><th>SIM/LINE</th><th>구분</th><th>사번</th><th>이름</th>
+              <th>No</th><th>기종</th><th>SIM/LINE</th><th>자격</th><th>사번</th><th>이름</th>
               <th>적격월</th><th>최근 심사일</th><th>만료일</th><th class="center">현재상태</th>
             </tr></thead>
             <tbody id="qualm-tbody"></tbody>
@@ -697,6 +710,10 @@ select{font-family:inherit}
             <button class="btn btn-outline btn-sm" onclick="resetPlanFilter()">초기화</button>
             <button class="btn btn-outline btn-sm" id="plan-bulk-delete-btn" onclick="deleteSelectedPlanRows()" style="color:var(--fail);border-color:#EDD0CC"><i class="ti ti-trash"></i> 선택삭제</button>
             <button class="btn btn-excel btn-sm" id="plan-excel-btn" onclick="exportPlanExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('route-file-input').click()" title="편명·구간 2열 엑셀/CSV를 올리면 편명 입력 시 구간이 자동으로 채워져요">
+              <i class="ti ti-route" style="font-size:12px"></i> 노선 마스터
+            </button>
+            <input type="file" id="route-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="processRouteFile(this.files[0]);this.value=''">
           </div>
         </div>
         <div class="big-month-nav">
@@ -721,7 +738,7 @@ select{font-family:inherit}
               <th class="sortable" ondblclick="togglePlanSort('qual')">자격</th>
               <th class="sortable" ondblclick="togglePlanSort('empid')">사번</th>
               <th class="sortable" ondblclick="togglePlanSort('name')">이름</th>
-              <th class="sortable" ondblclick="togglePlanSort('date')">심사일정</th>
+              <th class="sortable" ondblclick="togglePlanSort('date')">심사일</th>
               <th>편명/구간</th>
               <th class="sortable" ondblclick="togglePlanSort('examiner')">심사관</th>
               <th>심사장소</th><th>비고</th>
@@ -823,7 +840,7 @@ select{font-family:inherit}
         <div class="table-card">
           <div class="table-head">
             <span class="table-title">심사결과 입력 <span class="badge-num" id="result-pending-badge" style="margin-left:6px"></span></span>
-            <span style="font-size:10px;color:var(--muted);margin-left:8px"><span class="set-badge" style="font-size:8px;width:14px;height:14px;vertical-align:middle">S</span> = SET 심사 (기장+부기장 동반)</span>
+            <span style="font-size:10px;color:var(--muted);margin-left:8px"><span class="set-badge" style="font-size:8px;width:14px;height:14px;vertical-align:middle">S</span> = SET 심사 (피심사자 2명 동반)</span>
           </div>
           <table class="tbl">
             <thead><tr>
@@ -831,6 +848,7 @@ select{font-family:inherit}
               <th class="sortable" ondblclick="toggleResultSort('simline')">SIM/LINE</th>
               <th class="sortable" ondblclick="toggleResultSort('type')">심사종류</th>
               <th>세부구분</th>
+              <th>과정</th>
               <th class="sortable" ondblclick="toggleResultSort('ac')">기종</th>
               <th class="sortable" ondblclick="toggleResultSort('qual')">자격</th>
               <th class="sortable" ondblclick="toggleResultSort('empid')">사번</th>
@@ -838,7 +856,6 @@ select{font-family:inherit}
               <th class="sortable" ondblclick="toggleResultSort('date')">심사일</th>
               <th>편명/구간</th>
               <th class="sortable" ondblclick="toggleResultSort('examiner')">심사관</th>
-              <th>과정</th>
               <th class="center">결과</th><th class="center">수정</th><th>비고</th>
             </tr></thead>
             <tbody id="result-tbody"></tbody>
@@ -1081,6 +1098,21 @@ select{font-family:inherit}
           </div>
         </div>
 
+        <div class="filter-bar" style="margin-bottom:6px">
+          <div style="display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:2px">
+            <button class="tab-btn" data-fmode="월" onclick="setFlycoMode('월')">월별</button>
+            <button class="tab-btn active" data-fmode="분기" onclick="setFlycoMode('분기')">분기별</button>
+            <button class="tab-btn" data-fmode="반기" onclick="setFlycoMode('반기')">반기별</button>
+            <button class="tab-btn" data-fmode="연도" onclick="setFlycoMode('연도')">연도별</button>
+          </div>
+        </div>
+        <div class="big-month-nav">
+          <button class="big-month-nav-btn" onclick="flycoPeriodPrev()">‹</button>
+          <span class="big-month-nav-title" id="flyco-period-title">—</span>
+          <button class="big-month-nav-btn" onclick="flycoPeriodNext()">›</button>
+        </div>
+        <div style="text-align:center;font-size:10.5px;color:var(--muted);margin:-6px 0 10px" id="flyco-period-range"></div>
+
         <div id="flyco-chart-section">
           <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:6px">
             <button class="btn btn-outline btn-sm" onclick="exportFlycoChartsPDF(event)"><i class="ti ti-file-type-pdf" style="font-size:12px"></i> 차트 PDF 다운로드</button>
@@ -1088,14 +1120,24 @@ select{font-family:inherit}
           </div>
           <div class="chart-grid">
             <div class="chart-card">
-              <div class="chart-title">항공기(LINE) 점수 분포</div>
-              <div class="chart-subtitle">인정/정기/수시 · 1~5점 (Trinity 기량체크 기준) · 막대 더블클릭 시 명단 확인</div>
-              <div class="chart-wrap" style="height:220px;max-height:220px"><canvas id="chart-flyco-line"></canvas></div>
+              <div class="chart-title">LINE 총점 분포</div>
+              <div class="chart-subtitle">막대 1칸 = <b>사람 1명</b> (총점 기준) · 더블클릭 시 명단</div>
+              <div class="chart-wrap" style="height:170px;max-height:170px"><canvas id="chart-flyco-line"></canvas></div>
             </div>
             <div class="chart-card">
-              <div class="chart-title">SIM 점수 분포</div>
-              <div class="chart-subtitle">인정/정기/수시 · 1~5점 (Trinity 기량체크 기준) · 막대 더블클릭 시 명단 확인</div>
-              <div class="chart-wrap" style="height:220px;max-height:220px"><canvas id="chart-flyco-sim"></canvas></div>
+              <div class="chart-title">SIM 총점 분포</div>
+              <div class="chart-subtitle">막대 1칸 = <b>사람 1명</b> (총점 기준) · 더블클릭 시 명단</div>
+              <div class="chart-wrap" style="height:170px;max-height:170px"><canvas id="chart-flyco-sim"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">LINE 항목별 점수 분포</div>
+              <div class="chart-subtitle">막대 1칸 = <b>채점 항목 1개</b> · 채점 변별력 확인용 · 더블클릭 시 명단</div>
+              <div class="chart-wrap" style="height:170px;max-height:170px"><canvas id="chart-flyco-item-line"></canvas></div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">SIM 항목별 점수 분포</div>
+              <div class="chart-subtitle">막대 1칸 = <b>채점 항목 1개</b> · 채점 변별력 확인용 · 더블클릭 시 명단</div>
+              <div class="chart-wrap" style="height:170px;max-height:170px"><canvas id="chart-flyco-item-sim"></canvas></div>
             </div>
           </div>
         </div>
@@ -1104,9 +1146,9 @@ select{font-family:inherit}
           <div class="filter-item"><span class="filter-label">기종</span>
             <select class="filter-select" id="flyco-ac" onchange="renderFlyco()"></select>
           </div>
-          <div class="filter-item"><span class="filter-label">항공기/SIM</span>
+          <div class="filter-item"><span class="filter-label">SIM/LINE</span>
             <select class="filter-select" id="flyco-simline" onchange="renderFlyco()">
-              <option value="전체">전체</option><option value="LINE">항공기</option><option value="SIM">SIM</option>
+              <option value="전체">전체</option><option value="LINE">LINE</option><option value="SIM">SIM</option>
             </select>
           </div>
           <div class="filter-item"><span class="filter-label">심사종류</span>
@@ -1131,10 +1173,16 @@ select{font-family:inherit}
           </div>
         </div>
         <div class="table-card">
-          <div class="table-head"><span class="table-title">심사기록 검토 목록 <span style="font-size:10px;color:var(--muted);font-weight:500">— 자동 추출값 오류 발생할 경우 수정 가능</span></span></div>
+          <div class="table-head" style="flex-wrap:wrap;gap:6px">
+            <span class="table-title">심사기록 검토 목록 <span style="font-size:10px;color:var(--muted);font-weight:500">— 자동 추출값 오류 발생할 경우 수정 가능</span></span>
+            <span style="font-size:10.5px;color:var(--muted);margin-left:auto">
+              <i class="ti ti-circle-check" style="color:var(--pass);font-size:12px"></i> 운항승무원 현황·심사관 관리에서 확인됨 &nbsp;
+              <i class="ti ti-help-circle" style="color:var(--hint);font-size:12px"></i> 미등록 (PDF 값 그대로 사용)
+            </span>
+          </div>
           <table class="tbl">
             <thead><tr>
-              <th>기종</th><th>항공기/SIM</th><th>심사종류</th><th>자격</th>
+              <th>기종</th><th>SIM/LINE</th><th>심사종류</th><th>자격</th>
               <th>사번</th><th>이름</th><th>심사일</th><th>총점</th><th class="center">결과</th>
               <th>심사관</th><th class="center">작업</th>
             </tr></thead>
@@ -1171,8 +1219,8 @@ select{font-family:inherit}
         <div class="form-group"><label class="form-label">기종</label>
           <select class="form-control" id="flyco-edit-ac"><option value="">선택</option><option>A330</option><option>B737</option><option>B777</option></select>
         </div>
-        <div class="form-group"><label class="form-label">항공기/SIM</label>
-          <select class="form-control" id="flyco-edit-simline"><option value="LINE">항공기</option><option value="SIM">SIM</option></select>
+        <div class="form-group"><label class="form-label">SIM/LINE</label>
+          <select class="form-control" id="flyco-edit-simline"><option value="LINE">LINE</option><option value="SIM">SIM</option></select>
         </div>
         <div class="form-group"><label class="form-label">심사종류</label>
           <select class="form-control" id="flyco-edit-type"><option value="">선택</option><option>인정</option><option>정기</option><option>수시</option></select>
@@ -1206,16 +1254,27 @@ select{font-family:inherit}
 
 <!-- ── 점수 분포 드릴다운 모달 ── -->
 <div class="modal-overlay" id="flyco-drill-modal">
-  <div class="modal-box" style="width:420px">
+  <div class="modal-box" style="width:680px">
     <div class="modal-header">
       <span class="modal-title" id="flyco-drill-title">인원 명단</span>
-      <button class="modal-close" onclick="closeFlycoDrillModal()">✕</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="exportFlycoDrillPDF(event)"><i class="ti ti-file-type-pdf" style="font-size:12px"></i> PDF</button>
+        <button class="btn btn-excel btn-sm" onclick="exportFlycoDrillExcel()"><i class="ti ti-file-spreadsheet" style="font-size:12px"></i> 엑셀</button>
+        <button class="modal-close" onclick="closeFlycoDrillModal()">✕</button>
+      </div>
     </div>
-    <div class="modal-body">
-      <table class="tbl">
-        <thead><tr><th>이름</th><th>사번</th><th>자격</th><th>기종</th></tr></thead>
-        <tbody id="flyco-drill-tbody"></tbody>
-      </table>
+    <div class="modal-body" id="flyco-drill-capture">
+      <div id="flyco-drill-subtitle" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
+      <div id="flyco-drill-summary"></div>
+      <div id="flyco-drill-subtype-hint" style="display:none;font-size:10.5px;color:#5A4080;background:#F0EDF8;border:1px solid #D8CEEC;border-radius:6px;padding:6px 8px;margin-bottom:8px">
+        <i class="ti ti-info-circle" style="font-size:12px"></i> 인정심사는 세부구분(초기/승격/전환/재자격)을 <b>수정 버튼</b>으로 지정할 수 있어요. 저장하면 차트와 리포트에 즉시 반영돼요.
+      </div>
+      <div class="table-card" style="margin-bottom:0;border:none">
+        <table class="tbl">
+          <thead id="flyco-drill-head"><tr><th>이름</th><th>사번</th><th>자격</th><th>기종</th></tr></thead>
+          <tbody id="flyco-drill-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
@@ -1298,7 +1357,7 @@ select{font-family:inherit}
         <input type="hidden" id="fm-edit-setid" value="">
         <div style="display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:2px;width:fit-content">
           <button class="qsl-btn active" id="add-mode-single" onclick="setAddMode('single')" style="font-size:11px;padding:3px 12px">단독 심사</button>
-          <button class="qsl-btn" id="add-mode-set" onclick="setAddMode('set')" style="font-size:11px;padding:3px 12px">✈ SET 심사 (기장+부기장)</button>
+          <button class="qsl-btn" id="add-mode-set" onclick="setAddMode('set')" style="font-size:11px;padding:3px 12px">✈ SET 심사 (피심사자 2명)</button>
         </div>
         <button class="btn btn-outline btn-sm" onclick="togglePlanModalEligible()" style="width:fit-content;margin-top:4px">
           <i class="ti ti-calendar-check" style="font-size:12px"></i> 이 달 적격자 확인
@@ -1312,7 +1371,7 @@ select{font-family:inherit}
       <div class="form-grid" style="margin-bottom:12px">
         <div class="form-group">
           <label class="form-label">SIM / LINE</label>
-          <select class="form-control" id="fm-simline" onchange="updateExaminerDatalistByContext()">
+          <select class="form-control" id="fm-simline" onchange="updateExaminerDatalistByContext();onSimlineChange()">
             <option value="">선택</option><option>LINE</option><option>SIM</option>
           </select>
         </div>
@@ -1333,7 +1392,7 @@ select{font-family:inherit}
         </div>
         <div class="form-group" id="fm-subtype-wrap" style="display:none">
           <label class="form-label">세부구분</label>
-          <select class="form-control" id="fm-subtype">
+          <select class="form-control" id="fm-subtype" onchange="if(typeof autoFillInjungPlaces==='function')autoFillInjungPlaces()">
             <option value="">선택</option>
           </select>
         </div>
@@ -1345,29 +1404,40 @@ select{font-family:inherit}
           </select>
         </div>
         <div class="form-group" id="fm-date-single-wrap">
-          <label class="form-label">심사일정</label>
+          <label class="form-label">심사일</label>
           <input class="form-control" id="fm-date" type="date">
         </div>
         <div class="form-group" id="fm-date-know-wrap" style="display:none">
-          <label class="form-label">지식심사일정</label>
+          <label class="form-label">지식심사일</label>
           <input class="form-control" id="fm-date-know" type="date">
         </div>
         <div class="form-group" id="fm-date-skill-wrap" style="display:none">
-          <label class="form-label">기량심사일정</label>
+          <label class="form-label">기량심사일</label>
           <input class="form-control" id="fm-date-skill" type="date">
         </div>
         <div class="form-group">
           <label class="form-label">편명/구간</label>
-          <input class="form-control" id="fm-flight" placeholder="예) TW101 ICN-NRT">
+          <input class="form-control" id="fm-flight" placeholder="예) TW101 ICN-NRT" list="fm-flight-list" autocomplete="off" oninput="renderFlightSuggestions()" onchange="autoFillPlaceFromFlight()" onblur="autoFillPlaceFromFlight()">
+          <datalist id="fm-flight-list"></datalist>
+          <div id="fm-flight-suggest" style="display:none;margin-top:4px;max-height:110px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--bg)"></div>
         </div>
         <div class="form-group">
           <label class="form-label">심사관</label>
           <input class="form-control" id="fm-examiner" placeholder="심사관 이름 입력 또는 선택" list="fm-examiner-list" autocomplete="off">
           <datalist id="fm-examiner-list"></datalist>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="fm-place-single-wrap">
           <label class="form-label">심사장소</label>
-          <input class="form-control" id="fm-place" placeholder="예) 김포공항, Sim센터">
+          <input class="form-control" id="fm-place" placeholder="예) CAE KOR, 김포공항" list="fm-place-list" autocomplete="off"><datalist id="fm-place-list"></datalist>
+          <div id="fm-place-hint" style="font-size:10px;color:var(--muted);margin-top:2px;display:none"></div>
+        </div>
+        <div class="form-group" id="fm-place-know-wrap" style="display:none">
+          <label class="form-label">지식심사 장소</label>
+          <input class="form-control" id="fm-place-know" placeholder="예) 운항표준팀, CAE KOR" list="fm-place-list" autocomplete="off">
+        </div>
+        <div class="form-group" id="fm-place-skill-wrap" style="display:none">
+          <label class="form-label">기량심사 장소</label>
+          <input class="form-control" id="fm-place-skill" placeholder="예) CAE KOR" list="fm-place-list" autocomplete="off">
         </div>
         <div class="form-group">
           <label class="form-label">내/외국인</label>
@@ -1386,46 +1456,63 @@ select{font-family:inherit}
         <div style="font-size:10px;font-weight:800;color:var(--muted);letter-spacing:1px;margin-bottom:8px;padding-top:8px;border-top:1px solid var(--border)">피심사자</div>
         <div class="form-grid">
           <div class="form-group">
-            <label class="form-label">자격</label>
+            <label class="form-label">사번</label>
+            <input class="form-control" id="fm-empid" placeholder="예) T180451" oninput="autoFillQualFromCrew('fm-empid','fm-name','fm-qual')">
+          </div>
+          <div class="form-group">
+            <label class="form-label">이름</label>
+            <input class="form-control" id="fm-name" placeholder="피심사자 이름" oninput="autoFillEmpid('fm-name','fm-empid');autoFillQualFromCrew('fm-empid','fm-name','fm-qual')" list="fm-name-list"><datalist id="fm-name-list"></datalist>
+          </div>
+          <div class="form-group full">
+            <label class="form-label">자격 <span id="fm-qual-hint" style="font-weight:400;color:var(--muted)">(운항승무원 현황에서 자동 입력)</span></label>
             <select class="form-control" id="fm-qual">
               <option value="">선택</option>
               <option>기장</option><option>부기장</option>
               <option>위촉심사관</option><option>교관</option>
             </select>
           </div>
-          <div class="form-group">
-            <label class="form-label">사번</label>
-            <input class="form-control" id="fm-empid" placeholder="예) 5102">
-          </div>
-          <div class="form-group full">
-            <label class="form-label">이름</label>
-            <input class="form-control" id="fm-name" placeholder="피심사자 이름" oninput="autoFillEmpid('fm-name','fm-empid')" list="fm-name-list"><datalist id="fm-name-list"></datalist>
-          </div>
         </div>
       </div>
-      <!-- SET 심사 (기장+부기장) -->
+      <!-- SET 심사 (피심사자 2명 동반) -->
       <div id="fm-set-area" style="display:none">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-top:8px;border-top:1px solid var(--border)">
+        <div style="font-size:10px;color:var(--muted);padding-top:8px;border-top:1px solid var(--border);margin-bottom:8px">
+          두 명이 한 세션에서 함께 받는 심사예요. 자격(기장/부기장)은 <b>운항승무원 현황</b>에서 자동으로 가져와요.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
-            <div style="font-size:10px;font-weight:800;color:#5B7FA6;letter-spacing:1px;margin-bottom:8px">기장 (Captain)</div>
+            <div style="font-size:10px;font-weight:800;color:#5B7FA6;letter-spacing:1px;margin-bottom:8px">피심사자 1</div>
             <div class="form-group" style="margin-bottom:8px">
               <label class="form-label">사번</label>
-              <input class="form-control" id="fm-empid-c" placeholder="기장 사번">
+              <input class="form-control" id="fm-empid-c" placeholder="예) T180451" oninput="autoFillQualFromCrew('fm-empid-c','fm-name-c','fm-qual-c')">
+            </div>
+            <div class="form-group" style="margin-bottom:8px">
+              <label class="form-label">이름</label>
+              <input class="form-control" id="fm-name-c" placeholder="피심사자 이름" oninput="autoFillEmpid('fm-name-c','fm-empid-c');autoFillQualFromCrew('fm-empid-c','fm-name-c','fm-qual-c')" list="fm-name-c-list"><datalist id="fm-name-c-list"></datalist>
             </div>
             <div class="form-group">
-              <label class="form-label">이름</label>
-              <input class="form-control" id="fm-name-c" placeholder="기장 이름" oninput="autoFillEmpid('fm-name-c','fm-empid-c')" list="fm-name-c-list"><datalist id="fm-name-c-list"></datalist>
+              <label class="form-label">자격</label>
+              <select class="form-control" id="fm-qual-c">
+                <option value="">자동 판별</option>
+                <option>기장</option><option>부기장</option><option>위촉심사관</option><option>교관</option>
+              </select>
             </div>
           </div>
           <div>
-            <div style="font-size:10px;font-weight:800;color:#8A75B0;letter-spacing:1px;margin-bottom:8px">부기장 (First Officer)</div>
+            <div style="font-size:10px;font-weight:800;color:#8A75B0;letter-spacing:1px;margin-bottom:8px">피심사자 2</div>
             <div class="form-group" style="margin-bottom:8px">
               <label class="form-label">사번</label>
-              <input class="form-control" id="fm-empid-f" placeholder="부기장 사번">
+              <input class="form-control" id="fm-empid-f" placeholder="예) T190447" oninput="autoFillQualFromCrew('fm-empid-f','fm-name-f','fm-qual-f')">
+            </div>
+            <div class="form-group" style="margin-bottom:8px">
+              <label class="form-label">이름</label>
+              <input class="form-control" id="fm-name-f" placeholder="피심사자 이름" oninput="autoFillEmpid('fm-name-f','fm-empid-f');autoFillQualFromCrew('fm-empid-f','fm-name-f','fm-qual-f')" list="fm-name-f-list"><datalist id="fm-name-f-list"></datalist>
             </div>
             <div class="form-group">
-              <label class="form-label">이름</label>
-              <input class="form-control" id="fm-name-f" placeholder="부기장 이름" oninput="autoFillEmpid('fm-name-f','fm-empid-f')" list="fm-name-f-list"><datalist id="fm-name-f-list"></datalist>
+              <label class="form-label">자격</label>
+              <select class="form-control" id="fm-qual-f">
+                <option value="">자동 판별</option>
+                <option>기장</option><option>부기장</option><option>위촉심사관</option><option>교관</option>
+              </select>
             </div>
           </div>
         </div>
@@ -1534,11 +1621,67 @@ const acDot = ac => {
   return `<span class="ac-dot dot-${cls}"></span>${ac}`;
 };
 // 과정(지식/기량/지식+기량) 표시 — 심사계획/심사결과/심사기록부 공통
+// ── 좌측 메뉴 배지 ──
+//  적격월 관리: 현재 담당 기종 기준, 이번 달에 자격이 만료되거나 이미 만료된 인원 수
+//  심사결과 관리: 현재 담당 기종 기준, 결과가 아직 입력되지 않은 심사 건수
+function activeAcFor(pageSelectId) {
+  const sel = $(pageSelectId);
+  if (sel && sel.value) return sel.value;                 // 해당 페이지에서 기종을 바꾸면 그 값을 따름
+  return (typeof currentUser!=='undefined' && currentUser?.ac) ? currentUser.ac : '전체';
+}
+function updateSidebarBadges() {
+  // ① 적격월: 만료임박(30일 이내) + 이미 만료된 인원
+  const qAc = activeAcFor('qualm-ac');
+  let qCnt = 0;
+  if (typeof qualmDB!=='undefined') {
+    // 담당 기종 기준, 자격이 이미 만료됐거나 곧 만료(30일 이내)되는 인원
+    qCnt = qualmDB.filter(r=>{
+      if (qAc!=='전체' && r.ac!==qAc) return false;
+      const st = (typeof calcQualmStatus==='function' && r.expDate) ? calcQualmStatus(r.expDate) : r.status;
+      return st==='만료임박' || st==='만료됨';
+    }).length;
+  }
+  const qb = $('badge-qualm');
+  if (qb) { qb.textContent = qCnt; qb.style.display = qCnt>0?'inline':'none'; qb.title = `${qAc==='전체'?'전체 기종':qAc} · 만료됨 + 만료임박 ${qCnt}명`; }
+
+  // ② 심사결과: 결과 미입력 건수 (해당 기종 · 선택된 월)
+  const rAc = activeAcFor('result-ac');
+  let rCnt = 0;
+  if (typeof DB!=='undefined') {
+    const ry = typeof resultYear!=='undefined' ? resultYear : new Date().getFullYear();
+    const rm = typeof resultMonth!=='undefined' ? resultMonth : new Date().getMonth()+1;
+    const ym = `${ry}-${String(rm).padStart(2,'0')}`;
+    rCnt = DB.filter(r=>(rAc==='전체'||r.ac===rAc) && r.date && r.date.startsWith(ym) && !r.result).length;
+  }
+  const rb = $('badge-result');
+  if (rb) { rb.textContent = rCnt; rb.style.display = rCnt>0?'inline':'none'; rb.title = `${rAc==='전체'?'전체 기종':rAc} · 결과 미입력 ${rCnt}건`; }
+}
+
+// 심사종류별 배지 클래스 — 모든 페이지에서 동일한 색을 쓰도록 한 곳에서 결정
+function typeTagClass(type) {
+  const t = (type||'').trim();
+  if (t.startsWith('LIP')) return 'tag-type-LIP';
+  if (['정기','인정','특수','특별','수시','사내'].includes(t)) return `tag-type-${t}`;
+  return 'tag-pend';
+}
+function typeTagHtml(type) {
+  return `<span class="badge-tag ${typeTagClass(type)}">${type||'—'}</span>`;
+}
+// 심사달력 이벤트 카드 색상 — 배지와 동일하게 심사종류로만 결정 (SIM/LINE은 카드 안 배지로 구분)
+function calEvClass(type) {
+  const t=(type||'').trim();
+  if (t.startsWith('LIP')) return 'LIP';
+  if (['정기','인정','특수','특별','수시','사내'].includes(t)) return t;
+  return '정기';
+}
+
 function getProcessDisp(r) {
   if (r.type==='인정') {
-    if (r.dateKnow && r.dateSkill) return `지식+기량<br><span style="font-size:9px;color:var(--muted)">지식 ${r.dateKnow}<br>기량 ${r.dateSkill}</span>`;
-    if (r.dateSkill) return `기량<br><span style="font-size:9px;color:var(--muted)">${r.dateSkill}</span>`;
-    if (r.dateKnow) return `지식<br><span style="font-size:9px;color:var(--muted)">${r.dateKnow}</span>`;
+    const tip = [r.placeKnow?`지식장소 ${r.placeKnow}`:'', r.placeSkill?`기량장소 ${r.placeSkill}`:''].filter(Boolean).join(' · ');
+    const t = tip ? ` title="${tip}"` : '';
+    if (r.dateKnow && r.dateSkill) return `<span${t}>지식+기량</span><br><span style="font-size:9px;color:var(--muted)">지식 ${r.dateKnow}<br>기량 ${r.dateSkill}</span>`;
+    if (r.dateSkill) return `<span${t}>기량</span><br><span style="font-size:9px;color:var(--muted)">${r.dateSkill}</span>`;
+    if (r.dateKnow) return `<span${t}>지식</span><br><span style="font-size:9px;color:var(--muted)">${r.dateKnow}</span>`;
   }
   return r.process || '—';
 }
@@ -1624,6 +1767,8 @@ function selectProfile(id) {
   $('main-screen').style.display = 'flex';
   initAllSelects();
   setTimeout(()=>{ if(typeof updateExaminerDatalist==='function') updateExaminerDatalist(); }, 200);
+  // 선택한 담당자의 기종 기준으로 좌측 메뉴 배지 갱신
+  if (typeof updateSidebarBadges==='function') updateSidebarBadges();
   nav('stat');
   // result month label 초기화
   const _rl=$('result-month-label');
@@ -1750,29 +1895,42 @@ function renderStat() {
   calcAndDrawStat(ac);
 }
 
-function updateStatPeriodOptions() {
-  const sel = $('stat-period');
+function statPeriodOptions() {
   const map = PERIOD_RANGES[statMode]||{};
-  // 시작일 기준 최신순으로 정렬 (Object 삽입 순서에 의존하지 않음)
-  const opts = Object.keys(map).sort((a,b)=> map[b][0].localeCompare(map[a][0]));
-  sel.innerHTML = opts.map(o=>`<option value="${o}"${o===statPeriodKey?' selected':''}>${o}</option>`).join('');
+  return Object.keys(map).sort((a,b)=> map[b][0].localeCompare(map[a][0])); // [0]=최신
+}
+function updateStatPeriodOptions() {
+  const opts = statPeriodOptions();
   if (!opts.includes(statPeriodKey)) statPeriodKey = opts[0];
-  sel.value = statPeriodKey;
+  updateStatPeriodTitle();
+}
+function updateStatPeriodTitle() {
+  const t = $('stat-period-title'); if(t) t.textContent = statPeriodKey || '—';
+  const r = $('stat-period-range');
+  const range = (PERIOD_RANGES[statMode]||{})[statPeriodKey];
+  if (r) r.textContent = range ? `${range[0]} ~ ${range[1]}` : '';
+}
+// ‹ 는 과거로, › 는 미래로 (목록이 최신순이라 인덱스 방향이 반대)
+function statPeriodPrev() {
+  const opts = statPeriodOptions();
+  const i = opts.indexOf(statPeriodKey);
+  if (i < opts.length-1) { statPeriodKey = opts[i+1]; updateStatPeriodTitle(); calcAndDrawStat($('stat-ac')?.value||'전체'); }
+}
+function statPeriodNext() {
+  const opts = statPeriodOptions();
+  const i = opts.indexOf(statPeriodKey);
+  if (i > 0) { statPeriodKey = opts[i-1]; updateStatPeriodTitle(); calcAndDrawStat($('stat-ac')?.value||'전체'); }
 }
 
 function setStatMode(mode) {
   statMode = mode;
   document.querySelectorAll('#page-stat .tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.mode===mode));
-  const opts = Object.keys(PERIOD_RANGES[mode]);
-  statPeriodKey = opts[0];
+  statPeriodKey = null; // 모드가 바뀌면 가장 최근 기간으로 초기화
   updateStatPeriodOptions();
   calcAndDrawStat($('stat-ac')?.value||'전체');
 }
 
-function onStatPeriodChange() {
-  statPeriodKey = $('stat-period').value;
-  calcAndDrawStat($('stat-ac')?.value||'전체');
-}
+
 
 function onStatAcChange() {
   calcAndDrawStat($('stat-ac').value);
@@ -1994,8 +2152,7 @@ function renderQualm() {
   const role = $('qualm-role')?.value||'전체';
   const rows = qualmDB.filter(r=>(ac==='전체'||r.ac===ac)&&(role==='전체'||r.role===role));
   const alertCnt = rows.filter(r=>r.status==='만료임박').length;
-  $('badge-qualm').textContent = alertCnt;
-  $('badge-qualm').style.display = alertCnt>0?'inline':'none';
+  updateSidebarBadges();
   $('qualm-alert-cnt').textContent = alertCnt;
   $('qualm-tbody').innerHTML = rows.length===0
     ? `<tr><td colspan="10" class="empty-state">해당 조건의 데이터가 없습니다</td></tr>`
@@ -2147,7 +2304,7 @@ function renderPlan() {
     : rows.map((r,i)=>`<tr>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':'tag-인정'}">${r.type}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${r.subtype}</td><td>${acDot(r.ac)}</td><td>${r.qual}</td>
         <td>${r.empid}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight}</td>
         <td>${r.examiner}</td><td>${r.place}</td><td>${r.note||'—'}</td>
@@ -2218,10 +2375,16 @@ function openPlanModal() {
   const acSel=$('plan-ac')?.value;
   $('fm-ac').value=(acSel&&acSel!=='전체')?acSel:(currentUser?.ac||'');
   if(!$('fm-ac').value&&currentUser?.ac) $('fm-ac').value=currentUser.ac;
-  $('fm-date').value=`${planYear}-${String(planMonth).padStart(2,'0')}-01`;
+  // 그리드에서 보고 있는 달의 1일을 기본값으로 (수정 가능)
+  const defaultDate = `${planYear}-${String(planMonth).padStart(2,'0')}-01`;
+  $('fm-date').value = defaultDate;
+  if($('fm-date-know'))  $('fm-date-know').value  = defaultDate;
+  if($('fm-date-skill')) $('fm-date-skill').value = defaultDate;
   if($('fm-type')) $('fm-type').value='';
   updateSubtypeOptions();
   updateExaminerDatalistByContext();
+  if (typeof updatePlaceDatalist==='function') updatePlaceDatalist();
+  if (typeof renderFlightSuggestions==='function') renderFlightSuggestions();
   $('plan-modal').classList.add('open');
 }
 function closePlanModal() {
@@ -2229,6 +2392,13 @@ function closePlanModal() {
   ['fm-simline','fm-ac','fm-type','fm-subtype','fm-qual'].forEach(id=>$(id).value='');
   ['fm-empid','fm-name','fm-date','fm-flight','fm-examiner','fm-place','fm-note'].forEach(id=>$(id).value='');
   ['fm-date-know','fm-date-skill','fm-process','fm-edit-id','fm-edit-setid'].forEach(id=>{if($(id))$(id).value='';});
+  // SET/단독 자격 셀렉트 초기화 + 자동입력 억제 플래그 해제
+  ['fm-qual','fm-qual-c','fm-qual-f'].forEach(id=>{ const el=$(id); if(el){ el.value=''; delete el.dataset.userSet; } });
+  ['fm-empid-c','fm-name-c','fm-empid-f','fm-name-f'].forEach(id=>{ if($(id)) $(id).value=''; });
+  const qh=$('fm-qual-hint'); if(qh){ qh.textContent='(운항승무원 현황에서 자동 입력)'; qh.style.color='var(--muted)'; }
+  const fs=$('fm-flight-suggest'); if(fs) fs.style.display='none';
+  const ph=$('fm-place-hint'); if(ph) ph.style.display='none';
+  ['fm-place','fm-place-know','fm-place-skill'].forEach(id=>{ const el=$(id); if(el){ el.value=''; delete el.dataset.autofilled; } });
   if($('fm-nationality')) $('fm-nationality').value='내국인';
   const panel=$('plan-modal-eligible-panel'); if(panel) panel.style.display='none';
   const icon=$('plan-modal-icon'); if(icon) icon.className='ti ti-plus';
@@ -2285,25 +2455,33 @@ function renderResult() {
   const pending = rows.filter(r=>!r.result).length;
   const badge=$('result-pending-badge');
   if(badge){badge.textContent=pending>0?pending+'건 미입력':'';badge.style.display=pending>0?'inline':'none';}
+  const _now = new Date();
+  const todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
   $('result-tbody').innerHTML = rows.length===0
     ? `<tr><td colspan="15" class="empty-state">해당 조건의 데이터가 없습니다 (${ry}년 ${rm}월)</td></tr>`
     : rows.map((r,i)=>{
         const resCls=r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
-        const tc=r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정';
-        const setBadge=r.setId?`<span class="set-badge" style="font-size:8px;width:16px;height:16px" title="SET 심사(기장+부기장 동반)">S</span> `:'';
-        return `<tr style="cursor:default">
+        const setBadge=r.setId?`<span class="set-badge" style="font-size:8px;width:16px;height:16px" title="SET 심사 (피심사자 2명 동반)">S</span> `:'';
+        // 아직 시행 전인 심사는 결과 입력칸을 비활성화 (인정심사는 지식·기량 중 나중 일정 기준)
+        const doneDate = examCompletionDate(r);
+        const notYet = doneDate && doneDate > todayStr;
+        return `<tr style="cursor:default${notYet?';opacity:.72':''}">
           <td>${i+1}</td>
           <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-          <td><span class="badge-tag ${tc}">${r.type||'—'}</span></td>
-          <td>${r.subtype||'—'}</td><td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
+          <td>${typeTagHtml(r.type)}</td>
+          <td>${r.subtype||'—'}</td>
+          <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
+          <td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
           <td>${r.empid||'—'}</td><td>${setBadge}${r.name}</td><td>${r.date}</td>
           <td>${r.flight&&r.flight!=='—'?r.flight:r.place||'—'}</td>
           <td><b>${r.examiner||'—'}</b></td>
-          <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
-          <td class="center"><span class="badge-tag ${resCls}">${r.result||'미입력'}</span></td>
+          <td class="center">${notYet
+            ? `<span class="badge-tag tag-pend" title="시행 예정 (${doneDate})">시행 전</span>`
+            : `<span class="badge-tag ${resCls}">${r.result||'미입력'}</span>`}</td>
           <td class="center">
             <select class="filter-select" style="font-size:10px;padding:1px 2px;width:68px;border-radius:4px"
-              onchange="updateResult(${r.id},this.value)">
+              ${notYet?`disabled title="심사 시행일(${doneDate}) 이후에 입력할 수 있어요"`:''}
+              onchange="updateResult(${r.id},this.value,this)">
               <option value="" ${!r.result?'selected':''}>미입력</option>
               <option value="합격" ${r.result==='합격'?'selected':''}>합격</option>
               <option value="불합격" ${r.result==='불합격'?'selected':''}>불합격</option>
@@ -2317,13 +2495,45 @@ function renderResult() {
         </tr>`;
       }).join('');
 }
-function updateResult(id, val) {
-  const row=DB.find(r=>r.id===id); if(row) row.result=val;
-  // 배지 실시간 갱신
-  const pending=DB.filter(r=>r.result==='').length;
-  $('badge-result').textContent=pending;
-  $('badge-result').style.display=pending>0?'inline':'none';
+// 심사가 실제로 끝난 시점의 날짜. 인정심사는 지식/기량 중 나중 것이 끝나야 완료로 본다.
+function examCompletionDate(row) {
+  const cands = [row.date, row.dateKnow, row.dateSkill].filter(d=>d && d!=='—');
+  if (!cands.length) return null;
+  return cands.sort()[cands.length-1]; // 가장 늦은 날짜
+}
+function updateResult(id, val, selectEl) {
+  const row=DB.find(r=>r.id===id); if(!row) return;
+  const prev = row.result || '';
+
+  // ── 아직 시행되지 않은 심사에는 결과를 입력할 수 없음 ──
+  if (val) {
+    const doneDate = examCompletionDate(row);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    if (doneDate && doneDate > todayStr) {
+      const isInjung = row.type==='인정' && (row.dateKnow||row.dateSkill);
+      const detail = isInjung
+        ? `지식 ${row.dateKnow||'—'} · 기량 ${row.dateSkill||'—'}`
+        : `심사일 ${row.date}`;
+      alert(`⛔ 아직 시행되지 않은 심사입니다.\n\n${row.name||''}${row.empid?` (${row.empid})`:''}\n${detail}\n오늘: ${todayStr}\n\n심사가 완료된 뒤에 결과를 입력해주세요.${isInjung?'\n(인정심사는 지식·기량 중 나중 일정이 지나야 입력할 수 있어요)':''}`);
+      if (selectEl) selectEl.value = prev;
+      return;
+    }
+  }
+
+  // 불합격은 되돌리기 어려운 중요한 판정이므로 저장 전에 한 번 확인
+  if (val === '불합격') {
+    const who = `${row.name||''}${row.empid?` (${row.empid})`:''}`;
+    const what = `${row.date||''} · ${row.simline||''} ${row.type||''}${row.subtype?' '+row.subtype:''}`;
+    if (!confirm(`⚠ 불합격으로 저장할까요?\n\n${who}\n${what}\n\n저장 후 심사결과분석·국토부 제출자료에도 반영됩니다.\n비고란에 불합격 사유를 반드시 입력해주세요.`)) {
+      if (selectEl) selectEl.value = prev; // 취소하면 원래 값으로 되돌림
+      return;
+    }
+  }
+  row.result = val;
+  updateSidebarBadges();
   saveToStorage();
+  renderResult();
 }
 function saveResults() { saveToStorage(); alert('☁️ 클라우드에 저장 완료되었습니다.'); renderResult(); }
 function resetResult() {
@@ -2350,8 +2560,8 @@ function exportResultExcel() {
     const cmp = va.localeCompare(vb, 'ko');
     return resultSortDir==='asc' ? cmp : -cmp;
   });
-  exportCSV(['No','SIM/LINE','심사종류','세부구분','기종','자격','사번','이름','심사일','편명/구간','심사관','과정','결과','비고','SET'],
-    rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,getProcessPlain(r),r.result||'미입력',r.note||'',r.setId?'SET':'']),
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','과정','기종','자격','사번','이름','심사일','편명/구간','심사관','결과','비고','SET'],
+    rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,getProcessPlain(r),r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,r.result||'미입력',r.note||'',r.setId?'SET':'']),
     `심사결과_${ry}년${rm}월_${ac}.csv`);
 }
 
@@ -2458,7 +2668,7 @@ function renderRecord() {
       return `<tr>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${r.subtype||'—'}</td><td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
         <td>${r.empid||'—'}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight||'—'}</td>
         <td>${r.examiner||'—'}</td><td>${r.place||'—'}</td>
@@ -2827,6 +3037,7 @@ async function loadFromStorage() {
     }
     renderRecord();renderPlan();renderResult();renderCal();renderQualm();
     calcAndDrawStat('전체');
+    updateSidebarBadges();
     return loaded;
   } catch(e) {
     console.warn('cloud load failed', e);
@@ -2900,6 +3111,8 @@ loadFromStorage().then(async ()=>{
   await loadCrewFromCloud();
   await loadExaminerFromCloud();
   if (typeof loadFlycoFromCloud==='function') await loadFlycoFromCloud();
+  if (typeof loadRoutesFromCloud==='function') await loadRoutesFromCloud();
+  if (typeof loadKnowPlacesFromCloud==='function') await loadKnowPlacesFromCloud();
   if (typeof syncExpiredExaminersFromDB==='function') {
     const added = syncExpiredExaminersFromDB();
     if (added>0) { renderExaminer(); saveExaminerToCloud(); }
@@ -2993,11 +3206,288 @@ function updateSubtypeOptions() {
   if (singleWrap) singleWrap.style.display = isInjung ? 'none' : '';
   if (knowWrap)   knowWrap.style.display   = isInjung ? '' : 'none';
   if (skillWrap)  skillWrap.style.display  = isInjung ? '' : 'none';
+  // 인정심사는 지식/기량이 다른 장소에서 시행될 수 있어 심사장소도 두 개로 분리
+  const pSingle = $('fm-place-single-wrap');
+  const pKnow = $('fm-place-know-wrap');
+  const pSkill = $('fm-place-skill-wrap');
+  if (pSingle) pSingle.style.display = isInjung ? 'none' : '';
+  if (pKnow)   pKnow.style.display   = isInjung ? '' : 'none';
+  if (pSkill)  pSkill.style.display  = isInjung ? '' : 'none';
+  if (isInjung && typeof autoFillInjungPlaces==='function') autoFillInjungPlaces();
+
+  // LIP 임무수행능력검증은 교관을 대상으로 하는 심사이므로 자격을 자동으로 '교관'으로 지정
+  const isLip = type === 'LIP임무수행능력검증';
+  ['fm-qual','fm-qual-c','fm-qual-f'].forEach(id=>{
+    const el = $(id); if (!el) return;
+    if (isLip) {
+      if (!el.dataset.lipLocked) { el.dataset.prevValue = el.value; el.dataset.lipLocked='1'; }
+      el.value = '교관';
+    } else if (el.dataset.lipLocked) {
+      // LIP에서 다른 심사종류로 바꾸면 원래 값으로 되돌림 (자동 판별도 다시 작동하도록)
+      el.value = el.dataset.prevValue || '';
+      delete el.dataset.lipLocked; delete el.dataset.prevValue;
+    }
+  });
+  const qh = $('fm-qual-hint');
+  if (qh) {
+    if (isLip) { qh.textContent = '(LIP 검증 — 교관으로 자동 지정)'; qh.style.color='var(--green)'; }
+    else if (qh.textContent.includes('LIP')) { qh.textContent='(운항승무원 현황에서 자동 입력)'; qh.style.color='var(--muted)'; }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════
 // 이름 → 사번 자동완성
 // ══════════════════════════════════════════════════════════════════
+// 사번(우선) 또는 이름으로 운항승무원 현황(crewDB)에서 자격을 찾아 자동 입력.
+// - 사번은 고유하므로 신뢰도 높음. 이름은 동명이인이 있으면 자동 입력하지 않고 사용자가 직접 고르게 둠.
+// - 사용자가 이미 자격을 직접 골라둔 경우(수동 지정)엔 덮어쓰지 않음.
+// ══════════════════════════════════════════════════════════════════
+// 지식심사 장소: 규칙 + 자동 학습
+//   기본 규칙) SIM 인정심사 → "트리니티 위촉심사실",  그 외 인정심사 → "지식심사실"
+//   학습) 담당자가 실제로 입력한 값을 (SIM/LINE × 심사종류 × 세부구분)별로 기억해 다음부터 우선 사용
+// ══════════════════════════════════════════════════════════════════
+let knowPlaceDB = {}; // {"SIM|인정|전환": "트리니티 위촉심사실", ...}
+const DEFAULT_KNOW_PLACE_SIM = '트리니티 위촉심사실';
+const DEFAULT_KNOW_PLACE     = '지식심사실';
+
+function knowPlaceKey(simline, type, subtype) { return `${simline||''}|${type||''}|${subtype||''}`; }
+function lookupKnowPlace(simline, type, subtype) {
+  const exact = knowPlaceDB[knowPlaceKey(simline, type, subtype)];   // ① 같은 조합 학습값
+  if (exact) return exact;
+  const loose = knowPlaceDB[knowPlaceKey(simline, type, '')];        // ② 세부구분 무관 학습값
+  if (loose) return loose;
+  if (type === '인정') return simline === 'SIM' ? DEFAULT_KNOW_PLACE_SIM : DEFAULT_KNOW_PLACE; // ③ 기본 규칙
+  return null;
+}
+function learnKnowPlace(simline, type, subtype, place) {
+  const p = (place||'').trim();
+  if (!p || p==='—' || !type) return;
+  const k = knowPlaceKey(simline, type, subtype);
+  if (knowPlaceDB[k] === p) return;
+  knowPlaceDB[k] = p;
+  saveKnowPlacesToCloud();
+}
+async function saveKnowPlacesToCloud() {
+  try { await saveChunkedDoc('knowplaces', JSON.stringify(knowPlaceDB)); }
+  catch(e){ console.warn('knowPlace save failed', e); }
+}
+async function loadKnowPlacesFromCloud() {
+  try {
+    const res = await loadChunkedDoc('knowplaces');
+    if (res) knowPlaceDB = JSON.parse(res.data||'{}') || {};
+  } catch(e){ console.warn('knowPlace load failed', e); }
+}
+
+// 인정심사에서 지식/기량 장소를 자동으로 채움 (사용자가 직접 쓴 값은 덮어쓰지 않음)
+function autoFillInjungPlaces() {
+  if ($('fm-type')?.value !== '인정') return;
+  const simline = $('fm-simline')?.value || '';
+  const subtype = $('fm-subtype')?.value || '';
+
+  const pk = $('fm-place-know');
+  if (pk && (!pk.value.trim() || pk.dataset.autofilled === '1')) {
+    const v = lookupKnowPlace(simline, '인정', subtype);
+    if (v) { pk.value = v; pk.dataset.autofilled = '1'; }
+  }
+  const ps = $('fm-place-skill');
+  if (ps && (!ps.value.trim() || ps.dataset.autofilled === '1')) {
+    const v = (simline === 'SIM') ? DEFAULT_SIM_PLACE : lookupRoute($('fm-flight')?.value);
+    if (v) { ps.value = v; ps.dataset.autofilled = '1'; }
+  }
+}
+// 사용자가 지식/기량 장소를 직접 고치면 자동채움 표시 해제
+document.addEventListener('input', e=>{
+  if (e.target && (e.target.id==='fm-place-know' || e.target.id==='fm-place-skill')) delete e.target.dataset.autofilled;
+});
+
+// ══════════════════════════════════════════════════════════════════
+// 편명 → 구간(심사장소) 매핑
+//   출처 ① 노선 마스터 업로드(routeDB)  ② 과거 심사계획 이력에서 자동 학습
+//   예) "TW201/202" → "ICN-FUK-ICN"
+// ══════════════════════════════════════════════════════════════════
+let routeDB = {}; // {편명: 구간}
+
+function normFlight(f) { return (f||'').trim().toUpperCase().replace(/\s+/g,''); }
+
+// 과거 심사계획에서 (편명 → 가장 많이 쓰인 장소)를 학습. 마스터에 없는 편명을 보완.
+function buildRouteMapFromHistory() {
+  const tally = {};
+  (typeof DB!=='undefined'?DB:[]).forEach(r=>{
+    if (r.simline!=='LINE') return;
+    const f = normFlight(r.flight), p = (r.place||'').trim();
+    if (!f || f==='—' || !p || p==='—') return;
+    tally[f] = tally[f] || {};
+    tally[f][p] = (tally[f][p]||0)+1;
+  });
+  const learned = {};
+  Object.entries(tally).forEach(([f,places])=>{
+    learned[f] = Object.entries(places).sort((a,b)=>b[1]-a[1])[0][0];
+  });
+  return learned;
+}
+function lookupRoute(flight) {
+  const f = normFlight(flight);
+  if (!f) return null;
+  if (routeDB[f]) return routeDB[f];                 // ① 마스터 우선
+  const learned = buildRouteMapFromHistory();
+  return learned[f] || null;                          // ② 이력 학습
+}
+// 편명 입력이 끝나면 구간을 심사장소에 자동 입력 (사용자가 직접 쓴 값은 덮어쓰지 않음)
+function autoFillPlaceFromFlight() {
+  // 인정심사면 기량심사 장소 칸에 반영
+  if ($('fm-type')?.value === '인정') { autoFillInjungPlaces(); return; }
+  if ($('fm-simline')?.value !== 'LINE') return;
+  const placeEl = $('fm-place'); if(!placeEl) return;
+  if (placeEl.value.trim() && placeEl.dataset.autofilled !== '1') return; // 수동 입력 존중
+  const route = lookupRoute($('fm-flight')?.value);
+  const hint = $('fm-place-hint');
+  if (route) {
+    placeEl.value = route;
+    placeEl.dataset.autofilled = '1';
+    if (hint) { hint.style.display='block'; hint.textContent = `편명에서 구간 자동 입력됨 · 필요하면 수정하세요`; hint.style.color='var(--green)'; }
+  } else if (hint && $('fm-flight')?.value.trim()) {
+    hint.style.display='block';
+    hint.textContent = '등록된 구간이 없는 편명이에요. 직접 입력하면 다음부터 자동으로 채워져요.';
+    hint.style.color='var(--muted)';
+  }
+}
+// 저장 시 (편명, 구간) 쌍을 마스터에 학습시켜 다음 입력부터 자동 완성되게 함
+function learnRoute(flight, place) {
+  const f = normFlight(flight), p = (place||'').trim();
+  if (!f || f==='—' || !p || p==='—') return;
+  if (routeDB[f] === p) return;
+  routeDB[f] = p;
+  saveRoutesToCloud();
+}
+async function saveRoutesToCloud() {
+  try { await saveChunkedDoc('routes', JSON.stringify(routeDB)); }
+  catch(e){ console.warn('route save failed', e); }
+}
+async function loadRoutesFromCloud() {
+  try {
+    const res = await loadChunkedDoc('routes');
+    if (res) routeDB = JSON.parse(res.data||'{}') || {};
+  } catch(e){ console.warn('route load failed', e); }
+}
+// 노선 마스터 업로드 (엑셀/CSV: 첫 열=편명, 둘째 열=구간)
+async function processRouteFile(file) {
+  if(!file) return;
+  await ensureXLSXLoaded();
+  const wb = XLSX.read(await file.arrayBuffer(), {type:'array'});
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''});
+  let added=0;
+  rows.forEach(row=>{
+    const f = normFlight(row[0]), p = String(row[1]||'').trim();
+    if (!f || !p || /편명|flight/i.test(f)) return; // 헤더행 skip
+    routeDB[f] = p; added++;
+  });
+  await saveRoutesToCloud();
+  alert(`노선 마스터 ${added}건이 등록되었어요. 이제 편명을 입력하면 구간이 자동으로 채워져요.`);
+}
+
+// 심사장소도 과거 입력 이력에서 자동 추천 (편명↔구간 학습과 동일한 원리)
+function updatePlaceDatalist() {
+  const dl = $('fm-place-list'); if(!dl) return;
+  const counts = {};
+  (typeof DB!=='undefined'?DB:[]).forEach(r=>{
+    [r.place, r.placeKnow, r.placeSkill].forEach(p=>{
+      const v=(p||'').trim();
+      if (v && v!=='—') counts[v]=(counts[v]||0)+1;
+    });
+  });
+  Object.values(routeDB||{}).forEach(v=>{ if(v) counts[v]=(counts[v]||0)+1; }); // 노선 마스터 구간도 후보에 포함
+  const list = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,30);
+  dl.innerHTML = list.map(([v])=>`<option value="${v}">`).join('');
+}
+
+// SIM 심사는 통상 CAE KOR에서 시행되므로 심사장소를 자동으로 채워줌 (수정 가능)
+const DEFAULT_SIM_PLACE = 'CAE KOR';
+function onSimlineChange() {
+  const sl = $('fm-simline')?.value;
+  const placeEl = $('fm-place'), hint = $('fm-place-hint');
+  if (!placeEl) return;
+  if (sl === 'SIM') {
+    // 비어있거나 이전에 자동으로 채운 값이면 갱신. 사용자가 직접 쓴 값은 건드리지 않음.
+    if (!placeEl.value.trim() || placeEl.dataset.autofilled === '1') {
+      placeEl.value = DEFAULT_SIM_PLACE;
+      placeEl.dataset.autofilled = '1';
+    }
+    if (hint) { hint.style.display='block'; hint.textContent = `SIM 기본 장소 "${DEFAULT_SIM_PLACE}" 자동 입력됨 · 필요하면 수정하세요`; }
+  } else {
+    if (placeEl.dataset.autofilled === '1') { placeEl.value=''; delete placeEl.dataset.autofilled; }
+    if (hint) hint.style.display='none';
+  }
+  renderFlightSuggestions();
+  if (typeof autoFillInjungPlaces==='function') autoFillInjungPlaces();
+}
+// 사용자가 장소를 직접 수정하면 자동채움 표시 해제
+document.addEventListener('input', e=>{ if(e.target && e.target.id==='fm-place') delete e.target.dataset.autofilled; });
+
+// LINE 심사 편명/구간: 과거에 등록했던 값을 빈도순으로 추천
+function getFlightHistory() {
+  const counts = {};
+  (typeof DB!=='undefined'?DB:[]).forEach(r=>{
+    if (r.simline==='LINE' && r.flight && r.flight!=='—') counts[r.flight]=(counts[r.flight]||0)+1;
+  });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+}
+function renderFlightSuggestions() {
+  const box = $('fm-flight-suggest'), input = $('fm-flight'), dl = $('fm-flight-list');
+  if (!box || !input) return;
+  if ($('fm-simline')?.value === 'SIM') { box.style.display='none'; if(dl) dl.innerHTML=''; return; }
+  const kw = input.value.trim().toUpperCase();
+  const hist = getFlightHistory().filter(([f])=>!kw || f.toUpperCase().includes(kw));
+  if (dl) dl.innerHTML = hist.slice(0,20).map(([f])=>`<option value="${f}">`).join('');
+  if (!hist.length) { box.style.display='none'; return; }
+  box.style.display='block';
+  box.innerHTML = `<div style="font-size:9.5px;color:var(--muted);padding:4px 8px 2px">이전에 등록한 편명/구간 · 클릭하면 입력돼요</div>` +
+    hist.slice(0,8).map(([f,c])=>`<div onclick="pickFlight('${f.replace(/'/g,"\\'")}')"
+        style="display:flex;justify-content:space-between;padding:4px 8px;cursor:pointer;font-size:11px"
+        onmouseover="this.style.background='#fff'" onmouseout="this.style.background='transparent'">
+      <span>${f}</span><span style="color:var(--muted);font-size:10px">${c}회</span>
+    </div>`).join('');
+}
+function pickFlight(f) {
+  const input = $('fm-flight'); if(!input) return;
+  input.value = f;
+  const box = $('fm-flight-suggest'); if(box) box.style.display='none';
+  autoFillPlaceFromFlight();
+}
+
+function autoFillQualFromCrew(empidId, nameId, qualId) {
+  const qualEl = $(qualId); if (!qualEl) return;
+  if (qualEl.dataset.lipLocked === '1') return; // LIP 검증은 교관 고정
+  if (qualEl.dataset.userSet === '1') return; // 사용자가 손으로 고른 값은 존중
+  if (typeof crewDB==='undefined' || !crewDB.length) return;
+
+  const empid = ($(empidId)?.value||'').trim();
+  const name  = ($(nameId)?.value||'').trim();
+
+  let match = null;
+  if (empid) {
+    match = crewDB.find(c=>c.empid===empid) || null;
+  }
+  if (!match && name) {
+    const byName = crewDB.filter(c=>c.name===name);
+    if (byName.length === 1) match = byName[0]; // 동명이인이면 자동 판별하지 않음
+  }
+  const hint = $('fm-qual-hint');
+  if (match && match.qual) {
+    qualEl.value = match.qual;
+    if (hint) { hint.textContent = `(${match.name} · ${match.ac} 기준 자동 입력)`; hint.style.color='var(--green)'; }
+  } else if (name || empid) {
+    if (hint) {
+      const dup = name ? crewDB.filter(c=>c.name===name).length : 0;
+      hint.textContent = dup>1 ? '(동명이인 있음 — 사번 입력 또는 직접 선택)' : '(운항승무원 현황에 없음 — 직접 선택)';
+      hint.style.color='var(--muted)';
+    }
+  }
+}
+// 사용자가 자격을 직접 바꾸면 이후 자동 입력이 덮어쓰지 않도록 표시
+['fm-qual','fm-qual-c','fm-qual-f'].forEach(id=>{
+  document.addEventListener('change', e=>{ if(e.target && e.target.id===id) e.target.dataset.userSet='1'; });
+});
+
 function autoFillEmpid(nameId, empidId) {
   const nameEl = $(nameId), empidEl = $(empidId);
   if (!nameEl || !empidEl) return;
@@ -3038,8 +3528,7 @@ renderQualm = function() {
       (!kw||((r.name||'').toLowerCase().includes(kw)||(r.empid||'').toLowerCase().includes(kw)))
     );
   const alertCnt = qualmDB.map(r=>calcQualmStatus(r.qualmYm)).filter(s=>s==='만료임박'||s==='만료됨').length;
-  $('badge-qualm').textContent=alertCnt;
-  $('badge-qualm').style.display=alertCnt>0?'inline':'none';
+  updateSidebarBadges();
   const badge=$('qualm-alert-badge');
   if(badge){badge.textContent=alertCnt>0?alertCnt+'건 주의':'';badge.style.display=alertCnt>0?'inline':'none';}
   const statusCls=s=>s==='만료됨'?'tag-fail':s==='만료임박'?'tag-인정':'tag-pass';
@@ -3079,9 +3568,7 @@ function showCalGroupPopup(event, ids) {
   const e=rows[0];
   const slCls=e.simline==='SIM'?'tag-sim':'tag-line';
   // 카드와 동일한 색상 분류 로직 (renderCal과 일치시켜야 클릭한 심사와 같은 색이 나옴)
-  const colorCls = e.simline==='SIM'
-    ? (e.type==='특수'?'특수':e.type==='인정'?'sim-인정':'sim-정기')
-    : (e.type==='특수'?'특수':e.type==='인정'?'line-인정':'line-정기');
+  const colorCls = calEvClass(e.type);
 
   // 카드 얼굴에 이미 보이는 정보(구분, 기종, 편명, 심사관 약칭)는 빼고,
   // 팝업에서만 확인 가능한 정보(장소, 사번, 결과, 비고) 위주로 표시. 미입력 항목은 그냥 생략.
@@ -3147,7 +3634,7 @@ openFailDrawer = function() {
     :rows.map((r,i)=>`<tr>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${acDot(r.ac)}</td><td>${r.qual||'—'}</td><td>${r.empid||'—'}</td><td>${r.name}</td>
         <td>${r.date}</td><td>${r.flight&&r.flight!=='—'?r.flight:r.place||'—'}</td><td>${r.examiner||'—'}</td>
       </tr>`).join('');
@@ -3329,6 +3816,22 @@ function setAddMode(mode) {
   if(seta) seta.style.display = mode==='set'?'':'none';
 }
 
+// SET 심사의 피심사자 한 명 정보를 확정. 자격을 비워두면 운항승무원 현황(crewDB)에서 사번→이름 순으로 조회.
+function resolveSetPerson(empidId, nameId, qualId) {
+  const empid = ($(empidId)?.value||'').trim();
+  const name  = ($(nameId)?.value||'').trim();
+  let qual    = ($(qualId)?.value||'').trim();
+  if (!qual && typeof crewDB!=='undefined' && crewDB.length) {
+    let m = empid ? crewDB.find(c=>c.empid===empid) : null;
+    if (!m && name) {
+      const byName = crewDB.filter(c=>c.name===name);
+      if (byName.length===1) m = byName[0]; // 동명이인이면 자동 판별하지 않음
+    }
+    if (m && m.qual) qual = m.qual;
+  }
+  return {empid, name, qual};
+}
+
 // ── savePlanRow 재정의 - SET 지원 + 수정모드 + 인정 지식/기량 분리일자 ──
 const _savePlanBase2 = savePlanRow;
 savePlanRow = function() {
@@ -3338,7 +3841,7 @@ savePlanRow = function() {
   let date, dateKnow='', dateSkill='';
   if (isInjung) {
     dateKnow = g('fm-date-know'); dateSkill = g('fm-date-skill');
-    if (!dateKnow && !dateSkill) { alert('인정 심사는 지식심사일정 또는 기량심사일정 중 하나 이상 입력해야 합니다.'); return; }
+    if (!dateKnow && !dateSkill) { alert('인정 심사는 지식심사일 또는 기량심사일 중 하나 이상 입력해야 합니다.'); return; }
     date = dateSkill || dateKnow; // 정렬/필터 기준일: 기량일 우선, 없으면 지식일
   } else {
     date = g('fm-date');
@@ -3348,44 +3851,103 @@ savePlanRow = function() {
     simline:g('fm-simline'),ac:g('fm-ac'),type,subtype:g('fm-subtype'),process,
     date, dateKnow: isInjung?dateKnow:'', dateSkill: isInjung?dateSkill:'',
     flight:g('fm-flight')||'—',examiner:g('fm-examiner')||'—',
-    place:g('fm-place')||'—',note:g('fm-note'),
+    place: isInjung ? (g('fm-place-skill')||g('fm-place-know')||'—') : (g('fm-place')||'—'),
+    placeKnow: isInjung ? g('fm-place-know') : '',
+    placeSkill: isInjung ? g('fm-place-skill') : '',
+    note:g('fm-note'),
     nationality: g('fm-nationality')||'내국인'
   };
-  if(!common.simline||!common.ac||!common.type||!date){alert('SIM/LINE, 기종, 심사종류, 심사일정은 필수입니다.');return;}
+  if(!common.simline||!common.ac||!common.type||!date){alert('SIM/LINE, 기종, 심사종류, 심사일은 필수입니다.');return;}
 
   const editId = g('fm-edit-id');
+
+  // ── 동일 피심사자 중복 등록 확인 ──
+  //   같은 사번(없으면 이름)으로 같은 SIM/LINE·심사종류 심사가 이미 있으면 경고.
+  //   같은 날이면 명백한 중복이므로 저장을 막고, 같은 달이면 확인 후 진행할 수 있게 함.
+  function findDuplicate(empid, name, excludeIds) {
+    const ym = date.slice(0,7);
+    return DB.filter(r=>{
+      if (excludeIds.includes(r.id)) return false;
+      if (r.simline!==common.simline || r.type!==common.type) return false;
+      const sameone = (empid && r.empid===empid) || (!empid && name && r.name===name);
+      if (!sameone) return false;
+      return r.date === date || (r.date||'').startsWith(ym);
+    });
+  }
+  function warnDuplicate(dups, who) {
+    const exact = dups.filter(d=>d.date===date);
+    if (exact.length) {
+      alert(`⛔ 중복 등록입니다.\n\n${who} 님은 ${date}에 이미 동일한 심사(${common.simline} ${common.type})가 등록되어 있어요.\n\n기존 항목을 수정하거나 삭제한 뒤 다시 시도해주세요.`);
+      return false; // 저장 중단
+    }
+    const d = dups[0];
+    return confirm(`⚠ 같은 달에 동일 심사가 이미 있어요.\n\n${who}\n기존: ${d.date} · ${d.simline} ${d.type}${d.subtype?' '+d.subtype:''}\n신규: ${date} · ${common.simline} ${common.type}${common.subtype?' '+common.subtype:''}\n\n그래도 등록할까요?`);
+  }
+
+  const editSetIdForDup = g('fm-edit-setid');
+  const excludeIds = editId
+    ? (editSetIdForDup ? DB.filter(r=>r.setId===editSetIdForDup).map(r=>r.id) : [Number(editId)])
+    : [];
+
+  if (addMode==='set') {
+    const c1 = resolveSetPerson('fm-empid-c','fm-name-c','fm-qual-c');
+    const c2 = resolveSetPerson('fm-empid-f','fm-name-f','fm-qual-f');
+    if (c1.empid && c1.empid===c2.empid) { alert('⛔ SET 심사의 두 피심사자가 동일인입니다.'); return; }
+    if (!c1.empid && !c2.empid && c1.name && c1.name===c2.name) { alert('⛔ SET 심사의 두 피심사자가 동일인입니다.'); return; }
+    for (const p of [c1,c2]) {
+      if (!p.name) continue;
+      const dups = findDuplicate(p.empid, p.name, excludeIds);
+      if (dups.length && !warnDuplicate(dups, `${p.name}${p.empid?` (${p.empid})`:''}`)) return;
+    }
+  } else {
+    const empid=g('fm-empid'), name=g('fm-name');
+    if (name) {
+      const dups = findDuplicate(empid, name, excludeIds);
+      if (dups.length && !warnDuplicate(dups, `${name}${empid?` (${empid})`:''}`)) return;
+    }
+  }
+
   const editSetId = g('fm-edit-setid');
 
   if (editId) {
     // ── 수정 모드 ──
     if (editSetId) {
-      const pair = DB.filter(r=>r.setId===editSetId);
-      const nameC=g('fm-name-c'),empidC=g('fm-empid-c');
-      const nameF=g('fm-name-f'),empidF=g('fm-empid-f');
-      if(!nameC||!nameF){alert('SET 심사: 기장과 부기장 이름을 모두 입력하세요.');return;}
-      pair.forEach(r=>{
+      const pair = DB.filter(r=>r.setId===editSetId).sort((a,b)=>(a.setSeq||0)-(b.setSeq||0));
+      const p1 = resolveSetPerson('fm-empid-c','fm-name-c','fm-qual-c');
+      const p2 = resolveSetPerson('fm-empid-f','fm-name-f','fm-qual-f');
+      if(!p1.name||!p2.name){alert('SET 심사: 피심사자 2명의 이름을 모두 입력하세요.');return;}
+      if(!p1.qual||!p2.qual){alert('SET 심사: 자격을 확인할 수 없는 피심사자가 있어요. 자격을 직접 선택해주세요.');return;}
+      pair.forEach((r,i)=>{
         Object.assign(r, common);
-        if(r.qual==='기장'){ r.name=nameC; r.empid=empidC; }
-        else { r.name=nameF; r.empid=empidF; }
+        const p = (r.setSeq===2 || (!r.setSeq && i===1)) ? p2 : p1;
+        r.name=p.name; r.empid=p.empid; r.qual=p.qual;
+        r.setSeq = (p===p1) ? 1 : 2;
       });
     } else {
       const row = DB.find(r=>r.id===Number(editId));
       if(!row){alert('수정할 심사를 찾을 수 없습니다.');return;}
       const qual=g('fm-qual'),empid=g('fm-empid'),name=g('fm-name');
-      if(!name){alert('이름은 필수입니다.');return;}
+      if(!name){alert('피심사자 이름은 필수입니다.');return;}
       Object.assign(row, common, {qual,empid,name});
     }
   } else if(addMode==='set'){
-    const nameC=g('fm-name-c'),empidC=g('fm-empid-c');
-    const nameF=g('fm-name-f'),empidF=g('fm-empid-f');
-    if(!nameC||!nameF){alert('SET 심사: 기장과 부기장 이름을 모두 입력하세요.');return;}
+    const p1 = resolveSetPerson('fm-empid-c','fm-name-c','fm-qual-c');
+    const p2 = resolveSetPerson('fm-empid-f','fm-name-f','fm-qual-f');
+    if(!p1.name||!p2.name){alert('SET 심사: 피심사자 2명의 이름을 모두 입력하세요.');return;}
+    if(!p1.qual||!p2.qual){alert('SET 심사: 자격을 확인할 수 없는 피심사자가 있어요. 자격을 직접 선택해주세요.');return;}
     const setId='S'+nextId;
-    DB.push({...common,id:nextId++,qual:'기장',  name:nameC,empid:empidC,setId,result:''});
-    DB.push({...common,id:nextId++,qual:'부기장',name:nameF,empid:empidF,setId,result:''});
+    DB.push({...common,id:nextId++,qual:p1.qual,name:p1.name,empid:p1.empid,setId,setSeq:1,result:''});
+    DB.push({...common,id:nextId++,qual:p2.qual,name:p2.name,empid:p2.empid,setId,setSeq:2,result:''});
   } else {
     const qual=g('fm-qual'),empid=g('fm-empid'),name=g('fm-name');
-    if(!name){alert('이름은 필수입니다.');return;}
+    if(!name){alert('피심사자 이름은 필수입니다.');return;}
     DB.push({...common,id:nextId++,qual,empid,name,setId:null,result:''});
+  }
+  // 자동 학습 (다음 입력부터 자동 완성)
+  if (!isInjung && common.simline==='LINE') learnRoute(common.flight, common.place);
+  if (isInjung) {
+    learnKnowPlace(common.simline, '인정', common.subtype, common.placeKnow);
+    if (common.simline==='LINE') learnRoute(common.flight, common.placeSkill);
   }
   closePlanModal(); renderPlan();
   saveToStorage();
@@ -3411,18 +3973,25 @@ function editPlanRow(id) {
   $('fm-flight').value = (row.flight&&row.flight!=='—')?row.flight:'';
   $('fm-examiner').value = (row.examiner&&row.examiner!=='—')?row.examiner:'';
   $('fm-place').value = (row.place&&row.place!=='—')?row.place:'';
+  if($('fm-place-know'))  $('fm-place-know').value  = row.placeKnow||'';
+  if($('fm-place-skill')) $('fm-place-skill').value = row.placeSkill||'';
   $('fm-note').value = row.note||'';
   if($('fm-nationality')) $('fm-nationality').value = row.nationality||'내국인';
+  if($('fm-place')) delete $('fm-place').dataset.autofilled; // 수정 모드에선 기존 장소를 사용자 값으로 취급
+  if(typeof renderFlightSuggestions==='function') renderFlightSuggestions();
   updateExaminerDatalistByContext();
 
   $('fm-edit-id').value = String(id);
   if (row.setId) {
     $('fm-edit-setid').value = row.setId;
     setAddMode('set');
-    const pair = DB.filter(r=>r.setId===row.setId);
-    const cap = pair.find(r=>r.qual==='기장'), fo = pair.find(r=>r.qual==='부기장');
-    $('fm-empid-c').value = cap?.empid||''; $('fm-name-c').value = cap?.name||'';
-    $('fm-empid-f').value = fo?.empid||'';  $('fm-name-f').value = fo?.name||'';
+    // 자격(기장/부기장)으로 짝을 찾으면 부기장 2명 SET 같은 경우가 깨지므로 순번(setSeq)으로 복원
+    const pair = DB.filter(r=>r.setId===row.setId).sort((a,b)=>(a.setSeq||0)-(b.setSeq||0));
+    const p1 = pair[0], p2 = pair[1];
+    $('fm-empid-c').value = p1?.empid||''; $('fm-name-c').value = p1?.name||'';
+    $('fm-empid-f').value = p2?.empid||''; $('fm-name-f').value = p2?.name||'';
+    if($('fm-qual-c')) { $('fm-qual-c').value = p1?.qual||''; $('fm-qual-c').dataset.userSet='1'; }
+    if($('fm-qual-f')) { $('fm-qual-f').value = p2?.qual||''; $('fm-qual-f').dataset.userSet='1'; }
   } else {
     $('fm-edit-setid').value = '';
     setAddMode('single');
@@ -3473,15 +4042,17 @@ function renderPlanModalEligibleList() {
     </div>`).join('');
 }
 function pickEligiblePerson(empid, name, role) {
+  const setQual=(id,val)=>{ const el=$(id); if(el && val){ el.value=val; el.dataset.userSet='1'; } };
   if (addMode==='set') {
-    if (role==='기장' || (!$('fm-name-c').value && role!=='부기장')) {
-      $('fm-empid-c').value = empid; $('fm-name-c').value = name;
+    // 자격으로 자리를 정하지 않고, 비어있는 칸부터 순서대로 채움 (부기장 2명 SET 등도 지원)
+    if (!$('fm-name-c').value) {
+      $('fm-empid-c').value = empid; $('fm-name-c').value = name; setQual('fm-qual-c', role);
     } else {
-      $('fm-empid-f').value = empid; $('fm-name-f').value = name;
+      $('fm-empid-f').value = empid; $('fm-name-f').value = name; setQual('fm-qual-f', role);
     }
   } else {
     $('fm-empid').value = empid; $('fm-name').value = name;
-    if (['기장','부기장','위촉심사관','교관'].includes(role)) $('fm-qual').value = role;
+    if (['기장','부기장','위촉심사관','교관'].includes(role)) setQual('fm-qual', role);
   }
 }
 
@@ -3499,11 +4070,10 @@ renderPlan = function() {
     :rows.map((r,i)=>{
       const sc=r.setId?(setColors[r.setId]===0?'set-group-a':'set-group-b'):'';
       const sb=r.setId?`<span class="set-badge ${setColors[r.setId]===0?'':'odd'}" title="SET 심사">S</span>`:'';
-      const tc=r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정';
       return `<tr class="${sc}" style="cursor:pointer" onclick="openPlanDetail(${r.id})">
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${tc}">${r.type}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${r.subtype}</td><td>${acDot(r.ac)}</td><td>${r.qual}</td>
         <td>${r.empid}</td><td>${sb}${r.name}</td><td>${r.date}</td><td>${r.flight}</td>
         <td><b>${r.examiner}</b></td><td>${r.place}</td><td>${r.note||'—'}</td>
@@ -3522,8 +4092,7 @@ function openPlanDetail(id) {
   const setRows=r.setId?DB.filter(d=>d.setId===r.setId):[r];
   const isSet=setRows.length>1;
   const slCls=r.simline==='SIM'?'tag-sim':'tag-line';
-  const tc=r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정';
-  $('pd-title').innerHTML=`<span class="badge-tag ${slCls}" style="margin-right:6px">${r.simline}</span><span class="badge-tag ${tc}" style="margin-right:8px">${r.type}</span>${r.subtype}${isSet?' <span style="font-size:11px;color:var(--muted)">· SET 심사</span>':''}`;
+  $('pd-title').innerHTML=`<span class="badge-tag ${slCls}" style="margin-right:6px">${r.simline}</span><span class="badge-tag ${typeTagClass(r.type)}" style="margin-right:8px">${r.type}</span>${r.subtype}${isSet?' <span style="font-size:11px;color:var(--muted)">· SET 심사</span>':''}`;
   $('pd-meta').textContent=`${r.ac}  ·  ${r.date}  ·  ${r.place}`;
   const persons=isSet
     ?`<div class="detail-persons">${setRows.map(p=>`<div class="detail-person-card">
@@ -3846,6 +4415,52 @@ async function ensureXLSXLoaded() {
 // ══════════════════════════════════════════════════════════════════
 let flycoDB = []; // 업로드된 심사기록 목록 (기량 체크만 — 지식/KNOWLEDGE 체크는 제외)
 let flycoFiles = {}; // 원본 PDF 파일 (filename -> base64 dataURL), 다운로드 버튼용
+let flycoMode = '분기';
+let flycoPeriodKey = null;
+
+function setFlycoMode(mode) {
+  flycoMode = mode;
+  document.querySelectorAll('#page-flyco .tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.fmode===mode));
+  flycoPeriodKey = null; // 모드가 바뀌면 가장 최근 기간으로 초기화
+  updateFlycoPeriodOptions();
+  renderFlyco();
+}
+function updateFlycoPeriodOptions() {
+  const map = PERIOD_RANGES[flycoMode] || {};
+  const opts = Object.keys(map).sort((a,b)=> map[b][0].localeCompare(map[a][0])); // 최신순
+  if (!opts.includes(flycoPeriodKey)) flycoPeriodKey = opts[0];
+  updateFlycoPeriodTitle();
+}
+function flycoPeriodOptions() {
+  const map = PERIOD_RANGES[flycoMode] || {};
+  return Object.keys(map).sort((a,b)=> map[b][0].localeCompare(map[a][0])); // [0]=최신
+}
+// ‹ 는 과거로, › 는 미래로 (목록은 최신순이므로 인덱스 방향이 반대)
+function flycoPeriodPrev() {
+  const opts = flycoPeriodOptions();
+  const i = opts.indexOf(flycoPeriodKey);
+  if (i < opts.length-1) { flycoPeriodKey = opts[i+1]; updateFlycoPeriodTitle(); renderFlyco(); }
+}
+function flycoPeriodNext() {
+  const opts = flycoPeriodOptions();
+  const i = opts.indexOf(flycoPeriodKey);
+  if (i > 0) { flycoPeriodKey = opts[i-1]; updateFlycoPeriodTitle(); renderFlyco(); }
+}
+function updateFlycoPeriodTitle() {
+  const t = $('flyco-period-title'); if(t) t.textContent = flycoPeriodKey || '—';
+  const r = $('flyco-period-range');
+  const range = (PERIOD_RANGES[flycoMode]||{})[flycoPeriodKey];
+  if (r) r.textContent = range ? `${range[0]} ~ ${range[1]}` : '';
+}
+// 기간 필터가 적용된 심사기록 (차트·표·리포트 모두 이 함수를 통해 데이터를 가져감)
+function flycoRowsInPeriod() {
+  const range = (PERIOD_RANGES[flycoMode]||{})[flycoPeriodKey];
+  if (!range) return flycoDB; // 기간 옵션이 아직 준비되지 않은 초기 렌더링 대비
+  const [s,e] = range;
+  return flycoDB.filter(r=>r.date && r.date>=s && r.date<=e);
+}
+// 현재 선택된 기간 라벨 (파일명·리포트 제목용)
+function flycoPeriodLabel() { return flycoPeriodKey || '기간미선택'; }
 
 async function ensurePDFJSLoaded() {
   if (window.pdfjsLib) return;
@@ -3958,17 +4573,24 @@ function parseFlycoText(text, filename) {
     else if (dateSlash) rec.date = `${dateSlash[3]}-${dateSlash[2]}-${dateSlash[1]}`;
     else if (dateDot) rec.date = `${dateDot[1]}-${String(dateDot[2]).padStart(2,'0')}-${String(dateDot[3]).padStart(2,'0')}`;
 
-    // 심사종류/세부구분: 문서 제목 우선 → CHECK-TYPE 필드 → 본문 스캔
-    const titleTypeM = titleLine.match(/Initial|Transition|Upgrade|Requalification|Recurrent/i);
-    if (titleTypeM) { const m=mapCheckTypeToSubtype(titleTypeM[0]); rec.type=m.type; rec.subtype=m.subtype; }
-    if (!rec.type) {
-      const typeM = block.match(/CHECK\s*-\s*TYPE\s+(INITIAL|UPGRADE|TRANSITION|RECURRENT|REQUALIFICATION)/i);
-      if (typeM) { const m=mapCheckTypeToSubtype(typeM[1]); rec.type=m.type; rec.subtype=m.subtype; }
+    // 심사종류/세부구분 추론
+    // ⚠ 우선순위: ① CHECK-TYPE 필드(권위 있는 값) → ② 제목(키워드가 딱 1개일 때만) → ③ 본문 스캔
+    //   FFS 템플릿 제목 "A330 - Initial / Transition FFS Checkride"처럼 키워드가 여러 개 박힌
+    //   '템플릿 이름'을 심사종류로 오인하면 안 되므로, 모호한 제목은 아예 쓰지 않고 지식체크에서 상속받는다.
+    const typeM = block.match(/CHECK\s*-\s*TYPE\s+(INITIAL|UPGRADE|TRANSITION|RECURRENT|REQUALIFICATION)/i);
+    if (typeM) { const m=mapCheckTypeToSubtype(typeM[1]); rec.type=m.type; rec.subtype=m.subtype; }
+
+    const titleKeywords = titleLine.match(/Initial|Transition|Upgrade|Requalification|Recurrent/gi) || [];
+    const uniqTitleKw = [...new Set(titleKeywords.map(k=>k.toLowerCase()))];
+    const titleAmbiguous = uniqTitleKw.length > 1; // 템플릿 이름일 가능성이 큼 → 신뢰하지 않음
+    if (!rec.type && uniqTitleKw.length === 1) {
+      const m=mapCheckTypeToSubtype(uniqTitleKw[0]); rec.type=m.type; rec.subtype=m.subtype;
     }
     if (!rec.type) {
       if (/수시/.test(block)) { rec.type='수시'; rec.subtype='수시'; }
-      else if (/Recurrent/i.test(block)) { rec.type='정기'; rec.subtype='정기'; }
-      else if (/Initial|Transition|Upgrade/i.test(block)) { rec.type='인정'; rec.subtype='최초_초기'; }
+      else if (!titleAmbiguous && /Recurrent/i.test(block)) { rec.type='정기'; rec.subtype='정기'; }
+      // 모호한 제목이면 Initial/Transition 본문 스캔도 금지 (제목 문구가 본문에 그대로 들어있기 때문)
+      else if (!titleAmbiguous && /Initial|Transition|Upgrade/i.test(block)) { rec.type='인정'; rec.subtype='최초_초기'; }
     }
 
     // 이름/사번 (PILOT SIGNATURE 줄 또는 Name of Pilot / Trainee Name)
@@ -3981,9 +4603,15 @@ function parseFlycoText(text, filename) {
     }
 
     // 심사관
-    const examinerM = block.match(/INSTRUCTOR SIGNATURE[\s\S]{0,60}?\(T\d+\)\s+([A-Z][A-Z .]+?)\s*\((T\d+)\)/)
-      || block.match(/Checker'?s name\s+([^\n]+)/);
-    if (examinerM) rec.examiner = (examinerM[1]||'').trim();
+    // 심사관: 서명란에 "영문명 (사번)" 형태로 들어있음. 사번은 매칭 신뢰도가 가장 높으므로 반드시 보관.
+    const examinerM = block.match(/INSTRUCTOR SIGNATURE[\s\S]{0,60}?\(T\d+\)\s+([A-Z][A-Z .]+?)\s*\((T\d+)\)/);
+    if (examinerM) {
+      rec.examiner = (examinerM[1]||'').trim();
+      rec.examinerEmpidPdf = examinerM[2] || '';
+    } else {
+      const officialM = block.match(/Checker'?s name\s+([^\n]+)/);
+      if (officialM) rec.examiner = (officialM[1]||'').trim();
+    }
 
     // 점수(총점)/결과 + 항목별 1~5점 분포 (Trinity 기량체크만 — 국토부 서식은 S/U라 해당 없음)
     if (isKnowledge) {
@@ -4013,17 +4641,21 @@ function parseFlycoText(text, filename) {
     records.push(rec);
   });
 
-  // 같은 파일 내 "기량" 레코드에 심사종류가 비어있으면, 같은 사번의 "지식" 레코드에서 상속
-  // (LINE Check 등 일부 양식은 CHECK-TYPE을 따로 안 주고 지식 체크와 세션을 공유함)
+  // 지식(KNOWLEDGE) 체크의 CHECK-TYPE이 심사종류/세부구분의 권위 있는 출처.
+  // 같은 파일·같은 사번의 기량 레코드에는 항상 이 값을 덮어쓴다.
+  // (기량 문서는 CHECK-TYPE 필드가 없고, 제목은 템플릿 이름이라 신뢰할 수 없음)
   records.forEach(r=>{
-    if (r.process==='기량' && !r.type) {
-      const sib = records.find(s=>s.process==='지식' && s.empid && s.empid===r.empid);
+    if (r.process==='기량') {
+      const sib = records.find(s=>s.process==='지식' && s.empid && s.empid===r.empid && s.type);
       if (sib) { r.type=sib.type; r.subtype=sib.subtype; }
     }
   });
   // 파싱 신뢰도 체크 — 핵심 필드가 비어있으면 "검토 필요" 표시
+  // 인정심사인데 세부구분(초기/승격/전환/재자격)을 못 정했으면 반드시 사람이 확인해야 함
   records.forEach(r=>{
-    r.needsReview = !r.ac || !r.name || !r.date || !r.result || (r.source==='Trinity' && r.process==='기량' && !r.score);
+    r.needsReview = !r.ac || !r.name || !r.date || !r.result
+      || (r.source==='Trinity' && r.process==='기량' && !r.score)
+      || (r.type==='인정' && !r.subtype);
   });
   // 심사결과분석은 기량(마뉴버 체크) 결과만 다루므로, 지식(KNOWLEDGE) 체크는 세션 정보 상속에만 쓰고 최종 목록에서는 제외
   return records.filter(r=>r.process==='기량');
@@ -4031,6 +4663,20 @@ function parseFlycoText(text, filename) {
 
 // PDF 서명란은 영문 로마자로만 나오는 경우가 많아, 운항승무원 현황(crewDB)·심사관 관리(examinerDB)와
 // 사번/영문명 기준으로 매칭해서 정식 한글 이름·최신 자격으로 교정
+// 운항승무원 현황의 소속(dept)/비고(note)에서 인정심사 세부구분을 추론
+//   예) "부기장전환훈련요원/A330" → 전환,  "수습기장/B737" → 승격,  "부기장훈련요원/B737" → 초기
+//   ⚠ 어디까지나 추정이므로 결과에 subtypeFromCrew 표시를 남겨 사람이 확인할 수 있게 함
+function inferSubtypeFromCrew(crew) {
+  if (!crew) return null;
+  const dept = (crew.dept||'');
+  const note = (crew.note||'');
+  if (/전환훈련요원/.test(dept)) return '전환';            // 기장/부기장 전환훈련요원
+  if (/부기장훈련요원/.test(dept)) return '최초_초기';      // ⚠ '기장훈련요원'보다 먼저 검사 (부분일치 오인식 방지)
+  if (/수습기장|(?<!부)기장훈련요원/.test(dept)) return '승격'; // 부기장 → 기장 승격 과정
+  if (/기종전환/.test(note)) return '전환';
+  return null;
+}
+
 function resolveFlycoIdentities(recs) {
   const crewByEmpid = {};
   (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewByEmpid[c.empid]=c; });
@@ -4046,15 +4692,47 @@ function resolveFlycoIdentities(recs) {
     } else {
       r.matchedCrew = false;
     }
-    // 심사관: 심사관 관리에 등록된 "영문명"과 매칭 (없으면 PDF의 로마자 이름 그대로 둠)
-    const examMatch = examinerByEng[(r.examiner||'').toUpperCase().trim()];
+    // 심사관 매칭 (신뢰도 순): ① PDF의 심사관 사번 → ② 등록된 영문명 → ③ 한글 이름 그대로 일치
+    //   사번이 가장 확실하므로, CAE 심사관도 사번만 등록해두면 영문명 없이 자동 인식됨
+    let examMatch = null;
+    if (r.examinerEmpidPdf) {
+      examMatch = examinerDB.find(e=>e.empid && e.empid===r.examinerEmpidPdf) || null;
+    }
+    if (!examMatch) examMatch = examinerByEng[(r.examiner||'').toUpperCase().trim()] || null;
+    if (!examMatch && r.examiner) examMatch = examinerDB.find(e=>e.name===r.examiner) || null;
+
     if (examMatch) {
       r.examiner = examMatch.name;
-      r.examinerEmpid = examMatch.empid || '';
+      r.examinerEmpid = examMatch.empid || r.examinerEmpidPdf || '';
+      r.examinerType = examMatch.type || '';
       r.matchedExaminer = true;
     } else {
+      r.examinerEmpid = r.examinerEmpidPdf || '';
       r.matchedExaminer = false;
     }
+
+    // 세부구분(초기/승격/전환/재자격)이 비어있으면 심사계획 관리(DB)에서 보완.
+    // 담당자가 계획 등록 시 이미 입력해둔 값이라 PDF보다 신뢰도가 높은 경우가 많음.
+    // 매칭 기준: 같은 사번 + 심사일 ±3일 (계획일과 실제 심사일이 하루이틀 어긋나는 경우 대비)
+    if (!r.subtype && r.empid && r.date && typeof DB!=='undefined') {
+      const target = new Date(r.date).getTime();
+      const near = DB.filter(d=>d.empid===r.empid && d.subtype && d.date)
+        .map(d=>({d, diff: Math.abs(new Date(d.date).getTime()-target)}))
+        .filter(x=>x.diff <= 3*24*3600*1000)
+        .sort((a,b)=>a.diff-b.diff)[0];
+      if (near) {
+        r.subtype = near.d.subtype;
+        if (!r.type && near.d.type) r.type = near.d.type;
+        r.subtypeFromPlan = true;
+      }
+    }
+    // 인정심사인데 끝까지 세부구분을 못 정했으면, 운항승무원 현황의 소속/비고에서 추론 (마지막 안전망)
+    if (!r.subtype && r.type==='인정' && r.empid && crewByEmpid[r.empid]) {
+      const guess = inferSubtypeFromCrew(crewByEmpid[r.empid]);
+      if (guess) { r.subtype = guess; r.subtypeFromCrew = true; }
+    }
+    // 그래도 못 정했으면 검토 필요로 표시
+    if (r.type==='인정' && !r.subtype) r.needsReview = true;
   });
 }
 
@@ -4144,6 +4822,7 @@ function saveFlycoEdit() {
 function renderFlyco() {
   // 운항승무원 현황·심사관 관리가 나중에 갱신돼도 항상 최신 이름/자격이 반영되도록 매 렌더마다 재매칭
   resolveFlycoIdentities(flycoDB);
+  if (!flycoPeriodKey) updateFlycoPeriodOptions(); else updateFlycoPeriodTitle();
   const acSel = $('flyco-ac');
   if (acSel && acSel.dataset.filled!=='1') {
     acSel.innerHTML = '<option value="전체">전체</option>' + ALL_AC.filter(a=>a!=='전체').map(a=>`<option>${a}</option>`).join('');
@@ -4154,17 +4833,18 @@ function renderFlyco() {
   const typeF = $('flyco-type')?.value||'전체';
   const qualF = $('flyco-qual')?.value||'전체';
   const resultF = $('flyco-result')?.value||'전체';
-  const rows = flycoDB.filter(r=>
+  const inPeriod = flycoRowsInPeriod();
+  const rows = inPeriod.filter(r=>
     (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) &&
     (typeF==='전체'||r.type===typeF) && (qualF==='전체'||r.qual===qualF) &&
     (resultF==='전체'||r.result===resultF)
   );
 
-  $('flyco-val-total').textContent = flycoDB.length;
-  $('flyco-val-scored').textContent = flycoDB.filter(r=>r.source==='Trinity'&&r.score).length;
-  $('flyco-val-official').textContent = flycoDB.filter(r=>r.source==='국토부서식').length;
-  $('flyco-val-fail').textContent = flycoDB.filter(r=>r.result==='불합격').length;
-  $('flyco-val-review').textContent = flycoDB.filter(r=>r.needsReview).length;
+  $('flyco-val-total').textContent = inPeriod.length;
+  $('flyco-val-scored').textContent = inPeriod.filter(r=>r.source==='Trinity'&&r.score).length;
+  $('flyco-val-official').textContent = inPeriod.filter(r=>r.source==='국토부서식').length;
+  $('flyco-val-fail').textContent = inPeriod.filter(r=>r.result==='불합격').length;
+  $('flyco-val-review').textContent = inPeriod.filter(r=>r.needsReview).length;
 
   $('flyco-tbody').innerHTML = rows.length===0
     ? `<tr><td colspan="11" class="empty-state">업로드된 심사기록이 없습니다. 위에서 PDF를 올려주세요.</td></tr>`
@@ -4176,15 +4856,15 @@ function renderFlyco() {
           : '—';
         return `<tr style="${rowStyle}" title="${r.needsReview?'일부 항목이 비어있어요 — 수정 버튼으로 확인해주세요':''}">
         <td>${r.ac?acDot(r.ac):'—'}</td>
-        <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline==='SIM'?'SIM':'항공기'}</span></td>
+        <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
         <td>${r.type||'—'}</td>
         <td>${r.qual||'—'}</td>
         <td>${r.empid||'—'}</td>
-        <td style="font-weight:600">${r.name||'—'}${r.matchedCrew?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="운항승무원 현황과 매칭됨"></i>':''}</td>
+        <td style="font-weight:600">${r.name||'—'}${r.matchedCrew?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="운항승무원 현황에서 사번으로 확인됨 (이름·자격 자동 교정)"></i>':' <i class="ti ti-help-circle" style="color:var(--hint);font-size:11px" title="운항승무원 현황에 없는 사번 — PDF 값 그대로 사용 중"></i>'}</td>
         <td>${r.date||'—'}</td>
         <td style="line-height:1.3">${scoreDisp}</td>
         <td class="center"><span class="badge-tag ${resCls}">${r.result||'—'}</span></td>
-        <td>${r.examiner||'—'}${r.matchedExaminer?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="심사관 관리와 매칭됨"></i>':''}</td>
+        <td>${r.examiner||'—'}${r.matchedExaminer?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="심사관 관리에서 확인됨 (사번 또는 영문명 매칭)"></i>':' <i class="ti ti-help-circle" style="color:var(--hint);font-size:11px" title="심사관 관리에 없음 — 사번/영문명을 등록하면 자동 인식돼요"></i>'}</td>
         <td class="center" style="white-space:nowrap">
           <button class="btn btn-sm" style="background:#F0EDF8;color:#5A4080;border:1px solid #D8CEEC;padding:2px 6px" title="원본 PDF 다운로드" onclick="downloadFlycoFile('${r.filename.replace(/'/g,"\\'")}')"><i class="ti ti-download" style="font-size:12px"></i></button>
           <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 6px" title="수정" onclick="openFlycoEditModal('${r.id}')"><i class="ti ti-edit" style="font-size:12px"></i></button>
@@ -4201,10 +4881,21 @@ function computeFlycoScoreTable(simline) {
   const types=['인정','정기','수시'], quals=['기장','부기장'];
   const table = {};
   types.forEach(t=>{ table[t]={}; quals.forEach(q=>{ table[t][q]=[0,0,0,0,0]; }); });
-  flycoDB.filter(r=>r.source==='Trinity'&&r.simline===simline&&r.score&&types.includes(r.type)&&quals.includes(r.qual))
+  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.score&&types.includes(r.type)&&quals.includes(r.qual))
     .forEach(r=>{
       const s = Math.min(5,Math.max(1,parseInt(r.score)));
       table[r.type][r.qual][s-1]++;
+    });
+  return table;
+}
+// 항목 단위 집계 — 막대 1칸 = 채점 항목 1개 (사람 단위인 총점 차트와 달리 변별력 확인용)
+function computeFlycoItemTable(simline) {
+  const types=['인정','정기','수시'];
+  const table = {};
+  types.forEach(t=>{ table[t]=[0,0,0,0,0]; });
+  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.itemDist&&types.includes(r.type))
+    .forEach(r=>{
+      for (let s=1; s<=5; s++) table[r.type][s-1] += (r.itemDist[s]||0);
     });
   return table;
 }
@@ -4212,83 +4903,235 @@ function computeFlycoScoreTable(simline) {
 function computeFlycoSubtypeTable(simline) {
   const subtypes=['최초_초기','승격','전환','재자격'];
   const table = {}; subtypes.forEach(s=>{ table[s]=[0,0,0,0,0]; });
-  flycoDB.filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type==='인정'&&r.score&&subtypes.includes(r.subtype))
+  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type==='인정'&&r.score&&subtypes.includes(r.subtype))
     .forEach(r=>{ const s=Math.min(5,Math.max(1,parseInt(r.score))); table[r.subtype][s-1]++; });
   return table;
 }
-function drawFlycoCharts() {
-  ['LINE','SIM'].forEach(sl=>{
-    const t = computeFlycoScoreTable(sl);
-    const labels=['1점','2점','3점','4점','5점'];
-    const datasets=[];
-    const colors={'인정':'rgba(88,101,163,.75)','정기':'rgba(106,155,112,.75)','수시':'rgba(196,140,90,.75)'};
-    Object.keys(t).forEach(type=>{
-      const sum=[0,0,0,0,0];
-      Object.values(t[type]).forEach(arr=>arr.forEach((v,i)=>sum[i]+=v));
-      datasets.push({label:type, data:sum, backgroundColor:colors[type], borderRadius:4});
-    });
-    const chartId = `chart-flyco-${sl.toLowerCase()}`;
-    updateChart(chartId, 'bar', labels, datasets,
-      {scales:{x:{grid:{display:false}},y:{grid:{color:'#F0EAE4'},ticks:{stepSize:1}}}});
-    // 더블클릭 시 해당 점수/심사종류의 인원 명단 드릴다운 (canvas는 재사용되므로 리스너는 한 번만 부착)
-    // ⚠ 화면 확대(zoom) 때문에 Chart.js 기본 히트테스트가 좌표를 잘못 잡으므로,
-    //    getBoundingClientRect 비율로 캔버스 내부 좌표를 직접 환산해서 막대를 찾는다.
-    const canvas = $(chartId);
-    if (canvas && !canvas.dataset.dblclickBound) {
-      canvas.dataset.dblclickBound = '1';
-      canvas.addEventListener('dblclick', (evt)=>{
-        const chart = chartInstances[chartId]; if(!chart) return;
-        const rect = canvas.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
-        const px = (evt.clientX - rect.left) / rect.width  * chart.width;
-        const py = (evt.clientY - rect.top)  / rect.height * chart.height;
-        let hit = null;
-        for (let di=0; di<chart.data.datasets.length; di++) {
-          const meta = chart.getDatasetMeta(di);
-          if (meta.hidden) continue;
-          for (let i=0; i<meta.data.length; i++) {
-            const el = meta.data[i];
-            const halfW = (el.width||8)/2;
-            const top = Math.min(el.y, el.base), bottom = Math.max(el.y, el.base);
-            if (px >= el.x-halfW && px <= el.x+halfW && py >= top-6 && py <= bottom+6) { hit={di,i}; break; }
-          }
-          if (hit) break;
-        }
-        // 막대를 정확히 못 짚었으면, x축상 가장 가까운 막대로 폴백
-        if (!hit) {
-          let best=null, bestDist=Infinity;
-          for (let di=0; di<chart.data.datasets.length; di++) {
-            const meta = chart.getDatasetMeta(di);
-            for (let i=0; i<meta.data.length; i++) {
-              const el = meta.data[i];
-              const d = Math.abs(px - el.x);
-              if (d < bestDist && d < 24) { bestDist=d; best={di,i}; }
-            }
-          }
-          hit = best;
-        }
-        if (!hit) return;
-        const type = chart.data.datasets[hit.di].label;
-        const score = hit.i + 1;
-        showFlycoDrilldown(sl, type, score);
-      });
-      canvas.style.cursor='pointer';
+// ── 막대 더블클릭 히트테스트 (화면 확대 zoom 때문에 Chart.js 기본 히트테스트가 좌표를 잘못 잡음) ──
+function bindFlycoChartDblclick(chartId, onHit) {
+  const canvas = $(chartId);
+  if (!canvas || canvas.dataset.dblclickBound) return;
+  canvas.dataset.dblclickBound = '1';
+  canvas.style.cursor = 'pointer';
+  canvas.addEventListener('dblclick', (evt)=>{
+    const chart = chartInstances[chartId]; if(!chart) return;
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const px = (evt.clientX - rect.left) / rect.width  * chart.width;
+    const py = (evt.clientY - rect.top)  / rect.height * chart.height;
+    let hit = null;
+    for (let di=0; di<chart.data.datasets.length && !hit; di++) {
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) continue;
+      for (let i=0; i<meta.data.length; i++) {
+        const el = meta.data[i];
+        const halfW = (el.width||8)/2;
+        const top = Math.min(el.y, el.base), bottom = Math.max(el.y, el.base);
+        if (px >= el.x-halfW && px <= el.x+halfW && py >= top-6 && py <= bottom+6) { hit={di,i}; break; }
+      }
     }
+    // 막대를 정확히 못 짚었으면 x축상 가장 가까운 막대로 폴백
+    if (!hit) {
+      let best=null, bestDist=Infinity;
+      for (let di=0; di<chart.data.datasets.length; di++) {
+        const meta = chart.getDatasetMeta(di);
+        for (let i=0; i<meta.data.length; i++) {
+          const d = Math.abs(px - meta.data[i].x);
+          if (d < bestDist && d < 24) { bestDist=d; best={di,i}; }
+        }
+      }
+      hit = best;
+    }
+    if (!hit) return;
+    onHit(chart.data.datasets[hit.di].label, hit.i + 1);
   });
 }
+
+const FLYCO_TYPE_COLORS = {'인정':'rgba(88,101,163,.75)','정기':'rgba(106,155,112,.75)','수시':'rgba(196,140,90,.75)'};
+
+function drawFlycoCharts() {
+  const labels=['1점','2점','3점','4점','5점'];
+  ['LINE','SIM'].forEach(sl=>{
+    // ① 총점 분포 — 막대 1칸 = 사람 1명 (그 사람의 총점 기준)
+    const t = computeFlycoScoreTable(sl);
+    const scoreDatasets = Object.keys(t).map(type=>{
+      const sum=[0,0,0,0,0];
+      Object.values(t[type]).forEach(arr=>arr.forEach((v,i)=>sum[i]+=v));
+      return {label:type, data:sum, backgroundColor:FLYCO_TYPE_COLORS[type], borderRadius:4};
+    });
+    const scoreId = `chart-flyco-${sl.toLowerCase()}`;
+    updateChart(scoreId, 'bar', labels, scoreDatasets,
+      {scales:{x:{grid:{display:false}},y:{grid:{color:'#F0EAE4'},ticks:{stepSize:1}}}});
+    bindFlycoChartDblclick(scoreId, (type, score)=>showFlycoDrilldown(sl, type, score));
+
+    // ② 항목별 분포 — 막대 1칸 = 채점 항목 1개 (변별력 확인용)
+    const it = computeFlycoItemTable(sl);
+    const itemDatasets = Object.keys(it).map(type=>({
+      label:type, data:it[type], backgroundColor:FLYCO_TYPE_COLORS[type], borderRadius:4
+    }));
+    const itemId = `chart-flyco-item-${sl.toLowerCase()}`;
+    updateChart(itemId, 'bar', labels, itemDatasets,
+      {scales:{x:{grid:{display:false}},y:{grid:{color:'#F0EAE4'}}}});
+    bindFlycoChartDblclick(itemId, (type, score)=>showFlycoItemDrilldown(sl, type, score));
+  });
+}
+
+// ── 드릴다운 팝업: 현재 표시 중인 데이터를 기억해 PDF/엑셀로 내보낼 수 있게 함 ──
+let _flycoDrillCtx = null; // {kind, simline, type, score, rows, headers, title}
+
+const FLYCO_SUBTYPES = ['최초_초기','승격','전환','재자격'];
+const FLYCO_SUBTYPE_LABEL = {'최초_초기':'초기','승격':'승격','전환':'전환','재자격':'재자격'};
+
+// 인정심사 세부구분을 팝업에서 바로 지정 (차트/리포트에 즉시 반영)
+function updateFlycoSubtype(id, val) {
+  const r = flycoDB.find(r=>r.id===id); if(!r) return;
+  r.subtype = val;
+  r.subtypeManual = true;
+  r.needsReview = !r.ac || !r.name || !r.date || !r.result || (r.type==='인정' && !r.subtype);
+  saveFlycoToCloud();
+  renderFlyco();
+  // 팝업은 열어둔 채로 목록만 갱신
+  if (_flycoDrillCtx) {
+    if (_flycoDrillCtx.kind==='score') showFlycoDrilldown(_flycoDrillCtx.simline,_flycoDrillCtx.type,_flycoDrillCtx.score);
+    else showFlycoItemDrilldown(_flycoDrillCtx.simline,_flycoDrillCtx.type,_flycoDrillCtx.score);
+  }
+}
+let _flycoSubtypeEditId = null; // 세부구분을 수정 중인 행 id
+
+function startFlycoSubtypeEdit(id) { _flycoSubtypeEditId = id; refreshFlycoDrill(); }
+function cancelFlycoSubtypeEdit() { _flycoSubtypeEditId = null; refreshFlycoDrill(); }
+function saveFlycoSubtypeEdit(id) {
+  const sel = $(`flyco-subtype-sel-${id}`);
+  if (sel) updateFlycoSubtype(id, sel.value);
+  _flycoSubtypeEditId = null;
+  refreshFlycoDrill();
+}
+function refreshFlycoDrill() {
+  if (!_flycoDrillCtx) return;
+  const c = _flycoDrillCtx;
+  if (c.kind==='score') showFlycoDrilldown(c.simline, c.type, c.score);
+  else showFlycoItemDrilldown(c.simline, c.type, c.score);
+}
+
+// 세부구분 셀: 평소엔 텍스트, 수정 버튼을 눌러야 선택박스가 열림 (다른 페이지와 동일한 패턴)
+function subtypeCellHtml(r) {
+  if (r.type!=='인정') return '<span style="color:var(--hint)">—</span>';
+  if (_flycoSubtypeEditId === r.id) {
+    return `<div style="display:flex;align-items:center;gap:3px">
+      <select class="filter-select" id="flyco-subtype-sel-${r.id}" style="font-size:11px;width:82px">
+        <option value="" ${!r.subtype?'selected':''}>미지정</option>
+        ${FLYCO_SUBTYPES.map(s=>`<option value="${s}" ${r.subtype===s?'selected':''}>${FLYCO_SUBTYPE_LABEL[s]}</option>`).join('')}
+      </select>
+      <button class="btn btn-sm" style="background:#E9F2EA;color:var(--green);border:1px solid #C6DCC9;padding:2px 5px" title="저장"
+        onclick="saveFlycoSubtypeEdit('${r.id}')"><i class="ti ti-check" style="font-size:11px"></i></button>
+      <button class="btn btn-sm" style="background:#F2F0ED;color:var(--muted);border:1px solid var(--border2);padding:2px 5px" title="취소"
+        onclick="cancelFlycoSubtypeEdit()"><i class="ti ti-x" style="font-size:11px"></i></button>
+    </div>`;
+  }
+  const label = r.subtype ? FLYCO_SUBTYPE_LABEL[r.subtype] : '<span style="color:var(--fail);font-weight:700">미지정</span>';
+  let src = '';
+  if (!r.subtypeManual) {
+    if (r.subtypeFromPlan) src = '<div style="font-size:9px;color:var(--muted)">계획에서 자동</div>';
+    else if (r.subtypeFromCrew) src = '<div style="font-size:9px;color:#8A6B3A">승무원현황 추정 · 확인 필요</div>';
+  }
+  return `<div style="display:flex;align-items:center;gap:5px">
+    <span>${label}${src}</span>
+    <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 5px" title="세부구분 수정"
+      onclick="startFlycoSubtypeEdit('${r.id}')"><i class="ti ti-edit" style="font-size:11px"></i></button>
+  </div>`;
+}
+
+// 인정심사 세부구분별 인원 요약 (팝업 상단)
+function subtypeSummaryHtml(list) {
+  const counts = {}; FLYCO_SUBTYPES.forEach(s=>counts[s]=0);
+  let unset = 0;
+  list.forEach(r=>{ if(r.subtype && counts[r.subtype]!==undefined) counts[r.subtype]++; else unset++; });
+  const chips = FLYCO_SUBTYPES.map(s=>
+    `<span class="badge-num" style="background:#F0EDF8;color:#5A4080;border-color:#D8CEEC">${FLYCO_SUBTYPE_LABEL[s]} ${counts[s]}명</span>`
+  ).join('');
+  const unsetChip = unset ? `<span class="badge-num">미지정 ${unset}명</span>` : '';
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chips}${unsetChip}
+    <span class="badge-num" style="background:#EEF2F8;color:var(--line);border-color:#C8D5E4">전체 ${list.length}명</span></div>`;
+}
+
+// 총점 드릴다운: 그 점수를 총점으로 받은 사람 명단
 function showFlycoDrilldown(simline, type, score) {
-  const list = flycoDB.filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.score&&parseInt(r.score)===score);
-  $('flyco-drill-title').textContent = `${simline==='SIM'?'SIM':'항공기'} · ${type} · ${score}점 (${list.length}명)`;
+  const list = flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.score&&parseInt(r.score)===score);
+  const isInjung = type==='인정';
+  const title = `${simline} · ${type} · 총점 ${score}점 (${list.length}명)`;
+  $('flyco-drill-title').textContent = title;
+  $('flyco-drill-subtitle').textContent = `기간: ${flycoPeriodLabel()} · 집계단위: 사람 1명`;
+  $('flyco-drill-subtype-hint').style.display = isInjung ? 'block' : 'none';
+  $('flyco-drill-summary').innerHTML = isInjung ? subtypeSummaryHtml(list) : '';
+  const headers = isInjung
+    ? ['이름','사번','자격','기종','심사일','세부구분']
+    : ['이름','사번','자격','기종','심사일'];
+  $('flyco-drill-head').innerHTML = `<tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr>`;
   $('flyco-drill-tbody').innerHTML = list.length===0
-    ? `<tr><td colspan="4" class="empty-state">해당 조건의 인원이 없습니다</td></tr>`
-    : list.map(r=>`<tr><td style="font-weight:600">${r.name||'—'}</td><td>${r.empid||'—'}</td><td>${r.qual||'—'}</td><td>${r.ac?acDot(r.ac):'—'}</td></tr>`).join('');
+    ? `<tr><td colspan="${headers.length}" class="empty-state">해당 조건의 인원이 없습니다</td></tr>`
+    : list.map(r=>`<tr>
+        <td style="font-weight:600">${r.name||'—'}</td><td>${r.empid||'—'}</td>
+        <td>${r.qual||'—'}</td><td>${r.ac?acDot(r.ac):'—'}</td><td>${r.date||'—'}</td>
+        ${isInjung?`<td>${subtypeCellHtml(r)}</td>`:''}
+      </tr>`).join('');
+  _flycoDrillCtx = {kind:'score', simline, type, score, title, headers,
+    rows: list.map(r=>{
+      const base=[r.name||'',r.empid||'',r.qual||'',r.ac||'',r.date||''];
+      return isInjung ? [...base, FLYCO_SUBTYPE_LABEL[r.subtype]||'미지정'] : base;
+    })};
   $('flyco-drill-modal').classList.add('open');
 }
-function closeFlycoDrillModal() { $('flyco-drill-modal').classList.remove('open'); }
+
+// 항목별 드릴다운: 그 점수를 받은 항목이 있는 사람과, 그 사람이 그 점수를 몇 개 받았는지
+function showFlycoItemDrilldown(simline, type, score) {
+  const list = flycoRowsInPeriod()
+    .filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.itemDist&&(r.itemDist[score]||0)>0)
+    .map(r=>({...r, hitCount: r.itemDist[score]}))
+    .sort((a,b)=>b.hitCount-a.hitCount);
+  const isInjung = type==='인정';
+  const totalItems = list.reduce((s,r)=>s+r.hitCount, 0);
+  const title = `${simline} · ${type} · ${score}점 항목 ${totalItems}개 (${list.length}명)`;
+  $('flyco-drill-title').textContent = title;
+  $('flyco-drill-subtitle').textContent = `기간: ${flycoPeriodLabel()} · 집계단위: 채점 항목 1개`;
+  $('flyco-drill-subtype-hint').style.display = isInjung ? 'block' : 'none';
+  $('flyco-drill-summary').innerHTML = isInjung ? subtypeSummaryHtml(list) : '';
+  const headers = isInjung
+    ? ['이름','사번','자격','기종','세부구분',`${score}점 항목수`,'총 항목수']
+    : ['이름','사번','자격','기종',`${score}점 항목수`,'총 항목수'];
+  $('flyco-drill-head').innerHTML = `<tr>${headers.map((h,i)=>`<th${i>=headers.length-2?' class="center"':''}>${h}</th>`).join('')}</tr>`;
+  $('flyco-drill-tbody').innerHTML = list.length===0
+    ? `<tr><td colspan="${headers.length}" class="empty-state">해당 조건의 인원이 없습니다</td></tr>`
+    : list.map(r=>`<tr>
+        <td style="font-weight:600">${r.name||'—'}</td><td>${r.empid||'—'}</td>
+        <td>${r.qual||'—'}</td><td>${r.ac?acDot(r.ac):'—'}</td>
+        ${isInjung?`<td>${subtypeCellHtml(r)}</td>`:''}
+        <td class="center"><b>${r.hitCount}</b></td>
+        <td class="center" style="color:var(--muted)">${r.itemTotal||'—'}</td>
+      </tr>`).join('');
+  _flycoDrillCtx = {kind:'item', simline, type, score, title, headers,
+    rows: list.map(r=>{
+      const base=[r.name||'',r.empid||'',r.qual||'',r.ac||''];
+      const tail=[r.hitCount, r.itemTotal||''];
+      return isInjung ? [...base, FLYCO_SUBTYPE_LABEL[r.subtype]||'미지정', ...tail] : [...base, ...tail];
+    })};
+  $('flyco-drill-modal').classList.add('open');
+}
+
+// 팝업 내보내기 (PDF: 화면 캡처 / 엑셀: 표 데이터)
+async function exportFlycoDrillPDF(evt) {
+  if (!_flycoDrillCtx) return;
+  await exportElementAsPDF('flyco-drill-capture', `${_flycoDrillCtx.title.replace(/[·\s]+/g,'_')}`, evt, {orientation:'portrait'});
+}
+function exportFlycoDrillExcel() {
+  if (!_flycoDrillCtx) return;
+  const {headers, rows, title} = _flycoDrillCtx;
+  exportCSV(headers, rows, `${title.replace(/[·\s]+/g,'_')}_${flycoPeriodLabel()}.csv`);
+}
+function closeFlycoDrillModal() { _flycoSubtypeEditId = null; $('flyco-drill-modal').classList.remove('open'); }
 
 function renderFlycoFailList() {
   const card = $('flyco-fail-card'); if(card) card.style.display='block';
-  const rows = flycoDB.filter(r=>r.result==='불합격');
+  const rows = flycoRowsInPeriod().filter(r=>r.result==='불합격');
   $('flyco-fail-tbody').innerHTML = rows.length===0
     ? `<tr><td colspan="10" class="empty-state">불합격 건이 없습니다</td></tr>`
     : rows.map(r=>`<tr>
@@ -4308,27 +5151,78 @@ function updateFlycoField(id, field, val) {
 
 // ── 차트 다운로드: PDF(이미지 캡처) / 엑셀(집계 데이터) ──
 async function exportFlycoChartsPDF(evt) {
-  await exportElementAsPDF('flyco-chart-section', `심사결과분석_점수분포차트_${new Date().getFullYear()}년${new Date().getMonth()+1}월`, evt, {orientation:'landscape'});
+  await exportElementAsPDF('flyco-chart-section', `심사결과분석_점수분포차트_${flycoPeriodLabel()}`, evt, {orientation:'landscape'});
 }
-function exportFlycoChartsExcel() {
-  const headers = ['항공기/SIM','심사종류','자격','1점','2점','3점','4점','5점','합계'];
-  const rows = [];
+async function exportFlycoChartsExcel() {
+  await ensureXLSXLoaded();
+  const range = (PERIOD_RANGES[flycoMode]||{})[flycoPeriodKey];
+  const modeLabel = `${flycoMode}별`;
+  const periodText = range ? `${flycoPeriodKey} (${range[0]} ~ ${range[1]})` : flycoPeriodKey||'—';
+  const genAt = new Date().toLocaleString('ko-KR');
+
+  // 각 시트 상단에 어떤 기준으로 뽑은 자료인지 명시
+  function titleRows(chartName, unit) {
+    return [
+      ['심사결과분석 — 점수 분포'],
+      ['차트', chartName],
+      ['집계 기준', modeLabel],
+      ['대상 기간', periodText],
+      ['집계 단위', unit],
+      ['생성 일시', genAt],
+      [],
+    ];
+  }
+  const scoreCols = ['1점','2점','3점','4점','5점','합계'];
+
+  const wb = XLSX.utils.book_new();
+
+  // ── 시트 1·2: 총점 분포 (막대 1칸 = 사람 1명) ──
   ['LINE','SIM'].forEach(sl=>{
     const t = computeFlycoScoreTable(sl);
+    const aoa = [...titleRows(`${sl} 총점 분포`, '사람 1명 (총점 기준)'),
+      ['심사종류','자격', ...scoreCols]];
+    const total=[0,0,0,0,0];
     ['인정','정기','수시'].forEach(type=>{
+      const sub=[0,0,0,0,0];
       ['기장','부기장'].forEach(q=>{
         const arr=t[type][q];
-        rows.push([sl==='SIM'?'SIM':'항공기', type, q, ...arr, arr.reduce((a,b)=>a+b,0)]);
+        aoa.push([type, q, ...arr, arr.reduce((a,b)=>a+b,0)]);
+        arr.forEach((v,i)=>{sub[i]+=v; total[i]+=v;});
       });
+      aoa.push(['', `${type} 소계`, ...sub, sub.reduce((a,b)=>a+b,0)]);
     });
+    aoa.push(['총계','', ...total, total.reduce((a,b)=>a+b,0)]);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:12},{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10}];
+    XLSX.utils.book_append_sheet(wb, ws, `1.${sl}총점분포`.slice(0,31));
   });
-  exportCSV(headers, rows, `심사결과분석_점수분포데이터_${new Date().getFullYear()}년${new Date().getMonth()+1}월.csv`);
+
+  // ── 시트 3·4: 항목별 분포 (막대 1칸 = 채점 항목 1개) ──
+  ['LINE','SIM'].forEach(sl=>{
+    const it = computeFlycoItemTable(sl);
+    const aoa = [...titleRows(`${sl} 항목별 점수 분포`, '채점 항목 1개 (변별력 확인용)'),
+      ['심사종류', ...scoreCols, '4점 이상 비율']];
+    const total=[0,0,0,0,0];
+    ['인정','정기','수시'].forEach(type=>{
+      const arr=it[type], sum=arr.reduce((a,b)=>a+b,0);
+      const high = sum ? Math.round((arr[3]+arr[4])/sum*100)+'%' : '—';
+      aoa.push([type, ...arr, sum, high]);
+      arr.forEach((v,i)=>total[i]+=v);
+    });
+    const tSum=total.reduce((a,b)=>a+b,0);
+    aoa.push(['총계', ...total, tSum, tSum?Math.round((total[3]+total[4])/tSum*100)+'%':'—']);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:12},{wch:8},{wch:8},{wch:8},{wch:8},{wch:8},{wch:10},{wch:12}];
+    XLSX.utils.book_append_sheet(wb, ws, `2.${sl}항목별분포`.slice(0,31));
+  });
+
+  XLSX.writeFile(wb, `심사결과분석_점수분포_${modeLabel}_${flycoPeriodLabel()}.xlsx`);
 }
 
 // ── 원본 "심사결과분석.xlsx"와 동일한 구조(1.항공기/1-1인정심사/2.SIM/2-1기량심사 + 불합격 사항)로 xlsx 생성 ──
 async function exportFlycoAnalysis() {
   await ensureXLSXLoaded();
-  if (!flycoDB.length) { alert('업로드된 데이터가 없습니다.'); return; }
+  if (!flycoRowsInPeriod().length) { alert(`${flycoPeriodLabel()}에 해당하는 데이터가 없습니다.`); return; }
 
   function scoreBlockAOA(startRow, title, simline, byQual) {
     // byQual=true: 심사종류×자격구분(기장/부기장) 표 / false: 인정심사 세부구분(초기/승격/전환/재자격) 표
@@ -4379,7 +5273,7 @@ async function exportFlycoAnalysis() {
   const ws1 = XLSX.utils.aoa_to_sheet(aoa1);
   ws1['!cols'] = [{wch:11},{wch:9},{wch:9},{wch:7},{wch:7},{wch:9},{wch:7},{wch:9},{wch:7},{wch:9},{wch:7},{wch:9},{wch:7},{wch:11}];
 
-  const failRows = flycoDB.filter(r=>r.result==='불합격');
+  const failRows = flycoRowsInPeriod().filter(r=>r.result==='불합격');
   const aoa2 = [['2. 불합격 사항'],[],
     ['구분','일자','기종','직급','심사구분','이름','심사관','주요지적사항','조치내용','결과'],
     ...failRows.map(r=>[r.simline==='SIM'?'SIM':'항공기', r.date, r.ac, r.qual, `${r.type}${r.subtype?'('+r.subtype+')':''}`, r.name, r.examiner, r.note1||'', r.note2||'', '불합격'])
@@ -4389,10 +5283,9 @@ async function exportFlycoAnalysis() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws1, '1.월간심사결과분석');
   XLSX.utils.book_append_sheet(wb, ws2, '2.불합격 사항');
-  const now = new Date();
-  XLSX.writeFile(wb, `심사결과분석_${now.getFullYear()}년_${now.getMonth()+1}월.xlsx`);
+  XLSX.writeFile(wb, `심사결과분석_${flycoPeriodLabel()}.xlsx`);
 
-  const reviewCnt = flycoDB.filter(r=>r.needsReview).length;
+  const reviewCnt = flycoRowsInPeriod().filter(r=>r.needsReview).length;
   if (reviewCnt) alert(`⚠ 검토 필요 표시된 ${reviewCnt}건이 있어요. 값이 정확한지 한 번 더 확인해주세요.`);
 }
 
@@ -4695,15 +5588,7 @@ renderCal = function() {
     });
     return Object.values(map);
   }
-  function getCalEvCls(e) {
-    if(e.simline==='SIM') return 'sim';
-    const t=e.type||'';
-    if(t==='인정') return '인정';
-    if(t==='특수') return '특수';
-    if(t==='특별') return '특별';
-    if(t==='수시') return '수시';
-    return '정기';
-  }
+  function getCalEvCls(e) { return calEvClass(e.type); }
 
   let cells='', cnt=1;
   for(let i=0;i<42;i++){
@@ -4768,7 +5653,7 @@ function doOpenFailDrawer() {
     :rows.map((r,i)=>`<tr>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${r.subtype||'—'}</td><td>${acDot(r.ac)}</td>
         <td>${r.qual||'—'}</td><td>${r.empid||'—'}</td><td>${r.name}</td>
         <td>${r.date}</td>
@@ -4942,12 +5827,7 @@ renderQualm = function() {
       (r.qualmYm && isMonthDueForRow(qualmSearchMonth, parseInt(r.qualmYm.split('-')[1]), r.simline))
     );
 
-  const alertCnt = qualmDB
-    .map(r=>calcQualmStatus(r.expDate))
-    .filter(s=>s==='만료임박'||s==='만료됨').length;
-
-  $('badge-qualm').textContent = alertCnt;
-  $('badge-qualm').style.display = alertCnt>0?'inline':'none';
+  updateSidebarBadges();
   const badge=$('qualm-alert-badge');
   if(badge){
     badge.textContent = rows.length>0 ? `${qualmSearchMonth}월 적격월 도달 ${rows.length}명` : '';
@@ -5080,7 +5960,7 @@ renderPlan = function() {
         <td class="center"><input type="checkbox" class="plan-row-check" data-id="${r.id}" ${planSelectedIds.has(r.id)?'checked':''} onchange="togglePlanRowSelect(${r.id},this.checked)"></td>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':'tag-인정'}">${r.type}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${r.subtype}</td>
         <td style="font-size:10px;line-height:1.4">${processDisp}</td>
         <td>${acDot(r.ac)}</td><td>${r.qual}</td>
@@ -5225,9 +6105,7 @@ renderCal = function() {
     const evHtml=groups.map(g=>{
       const e=g.base;
       const n=g.persons.length;
-      const cls=e.simline==='SIM'
-        ? (e.type==='특수'?'특수':e.type==='인정'?'sim-인정':'sim-정기')
-        : (e.type==='특수'?'특수':e.type==='인정'?'line-인정':'line-정기');
+      const cls=calEvClass(e.type);
       const typeLabel=e.simline==='SIM'?`SIM · ${e.type||''}`:e.type;
       const examShort=e.examiner&&e.examiner!=='—'?e.examiner.split(' ')[0]:'';
       const flight=e.simline==='LINE'&&e.flight&&e.flight!=='—'?e.flight:'';
@@ -5371,9 +6249,6 @@ calcAndDrawStat = function(ac) {
   $('stat-val-exam').textContent  = hiredRows.length;
   $('stat-val-exam-pct').textContent = `전체 대비 ${hiredPct}% · 심사관 ${examinerCount}명`;
 
-  const pending = rows.filter(r=>!r.result).length;
-  $('badge-result').textContent = pending;
-  $('badge-result').style.display = pending>0 ? 'inline' : 'none';
 
   // 아래 4개 차트는 "심사계획"(예정 포함 전체)이 아니라 "심사결과"(결과가 입력된 완료 심사)만 반영
   const resultRows = rows.filter(r=>r.result);
@@ -5427,7 +6302,7 @@ function openExaminerDetail(name) {
     : rows.map((r,i)=>`<tr>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':'tag-인정'}">${r.type}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${r.subtype}</td><td>${acDot(r.ac)}</td><td>${r.name}</td><td>${r.date}</td>
         <td>${r.flight}</td>
         <td class="center"><span class="badge-tag ${r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend'}">${r.result||'미입력'}</span></td>
@@ -5482,7 +6357,7 @@ renderRecord = function() {
       return `<tr>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td><span class="badge-tag ${r.type==='정기'?'tag-정기':r.type==='특수'?'tag-sim':'tag-인정'}">${r.type||'—'}</span></td>
+        <td>${typeTagHtml(r.type)}</td>
         <td>${r.subtype||'—'}</td>
         <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
         <td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
