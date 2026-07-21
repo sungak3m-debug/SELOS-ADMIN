@@ -4558,9 +4558,10 @@ function parseFlycoText(text, filename) {
     const isKnowledge = /CHECK\s*-\s*KNOWLEDGE|SIM KNOWLEDGE CHECK/i.test(block);
     const isTrinityLine = /\(A?\d*\)?\s*CHECK\s*-\s*LINE/i.test(block) && !isKnowledge;
     const isTrinitySim = /FFS/i.test(titleLine) && !isKnowledge && !isTrinityLine;
+    // CAT II/III(저시정운항, LVO) · EDTO 등 특수운항자격심사 체크폼 — 제목에 FFS가 없어 별도 인식 필요
+    const isTrinitySpecial = /Low\s*Visibility\s*Operations|LVO|CAT\s*(?:II|2)\s*\/?\s*(?:III|3)?|EDTO/i.test(titleLine) && !isKnowledge;
     const isOfficial = /운\s*항\s*자\s*격\s*심\s*사\s*표|기량심사표/i.test(block);
-
-    if (!isKnowledge && !isTrinityLine && !isTrinitySim && !isOfficial) return; // 인식 안 되는 블록은 무시
+    if (!isKnowledge && !isTrinityLine && !isTrinitySim && !isTrinitySpecial && !isOfficial) return; // 인식 안 되는 블록은 무시
 
     const rec = {
       id: 'flyco_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
@@ -4579,6 +4580,7 @@ function parseFlycoText(text, filename) {
     if (isTrinitySim) rec.simline='SIM';
     else if (isKnowledge) rec.simline = /SIM/i.test(titleLine) ? 'SIM' : 'LINE';
     else if (isTrinityLine) rec.simline='LINE';
+    else if (isTrinitySpecial) rec.simline = /FFS|SIM/i.test(block) ? 'SIM' : 'LINE';
     else if (isOfficial) rec.simline = /SIM/i.test(block) && !/고정익항공기/.test(block) ? 'SIM' : 'LINE';
 
     // 자격: Trainee Role / 국토부 체크박스(■ CAP,F/O) / Duty code / 제목의 <CAPT> 표기
@@ -4600,8 +4602,14 @@ function parseFlycoText(text, filename) {
     // ⚠ 우선순위: ① CHECK-TYPE 필드(권위 있는 값) → ② 제목(키워드가 딱 1개일 때만) → ③ 본문 스캔
     //   FFS 템플릿 제목 "A330 - Initial / Transition FFS Checkride"처럼 키워드가 여러 개 박힌
     //   '템플릿 이름'을 심사종류로 오인하면 안 되므로, 모호한 제목은 아예 쓰지 않고 지식체크에서 상속받는다.
+    if (isTrinitySpecial) {
+      // CAT II/III(LVO) · EDTO는 정기/인정 구분과 무관하게 항상 "특수" 운항자격심사로 분류
+      // (SUBTYPE_MAP의 '특수' 세부구분 목록: EDTO / CAT II/III 와 표기를 맞춤)
+      rec.type='특수';
+      rec.subtype = /EDTO/i.test(titleLine) ? 'EDTO' : 'CAT II/III';
+    }
     const typeM = block.match(/CHECK\s*-\s*TYPE\s+(INITIAL|UPGRADE|TRANSITION|RECURRENT|REQUALIFICATION)/i);
-    if (typeM) { const m=mapCheckTypeToSubtype(typeM[1]); rec.type=m.type; rec.subtype=m.subtype; }
+    if (!rec.type && typeM) { const m=mapCheckTypeToSubtype(typeM[1]); rec.type=m.type; rec.subtype=m.subtype; }
 
     const titleKeywords = titleLine.match(/Initial|Transition|Upgrade|Requalification|Recurrent/gi) || [];
     const uniqTitleKw = [...new Set(titleKeywords.map(k=>k.toLowerCase()))];
@@ -4632,8 +4640,11 @@ function parseFlycoText(text, filename) {
       rec.examiner = (examinerM[1]||'').trim();
       rec.examinerEmpidPdf = examinerM[2] || '';
     } else {
+      // CAE 심사관 등 외주 심사관은 Trinity 사번(T######)이 없어 위 패턴에 안 걸림 → ID 없이 이름만 캡처
+      const examinerNoId = block.match(/INSTRUCTOR SIGNATURE[\s\S]{0,90}?([A-Z][A-Z .]{2,40}?)\s*(?:\n|\s{2,}|$)/);
       const officialM = block.match(/Checker'?s name\s+([^\n]+)/);
       if (officialM) rec.examiner = (officialM[1]||'').trim();
+      else if (examinerNoId) rec.examiner = (examinerNoId[1]||'').trim();
     }
 
     // 점수(총점)/결과 + 항목별 1~5점 분포 (Trinity 기량체크만 — 국토부 서식은 S/U라 해당 없음)
@@ -4702,10 +4713,12 @@ function inferSubtypeFromCrew(crew) {
 
 function resolveFlycoIdentities(recs) {
   const crewByEmpid = {};
-  (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewByEmpid[c.empid]=c; });
+  (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewByEmpid[c.empid.trim().toUpperCase()]=c; });
   const examinerByEng = {};
   (typeof examinerDB!=='undefined'?examinerDB:[]).forEach(e=>{ if(e.engName) examinerByEng[e.engName.toUpperCase().trim()]=e; });
   recs.forEach(r=>{
+    // 사번 앞뒤 공백/대소문자 차이로 정확매칭이 깨지는 걸 방지
+    if (r.empid) r.empid = r.empid.trim().toUpperCase();
     // 피심사자: 사번으로 정확히 매칭 가능 (PDF에 사번이 있는 경우)
     if (r.empid && crewByEmpid[r.empid]) {
       const c = crewByEmpid[r.empid];
@@ -4714,6 +4727,8 @@ function resolveFlycoIdentities(recs) {
       r.matchedCrew = true;
     } else {
       r.matchedCrew = false;
+      // 사번 매칭 실패 + 이름이 영문(로마자)으로만 남아있으면, 화면에 조용히 노출되지 않도록 검토 필요로 표시
+      if (r.name && /^[A-Z .]+$/.test(r.name.trim())) r.needsReview = true;
     }
     // 심사관 매칭 (신뢰도 순): ① PDF의 심사관 사번 → ② 등록된 영문명 → ③ 한글 이름 그대로 일치
     //   사번이 가장 확실하므로, CAE 심사관도 사번만 등록해두면 영문명 없이 자동 인식됨
