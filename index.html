@@ -2492,7 +2492,7 @@ function renderResult() {
           <td><b>${r.examiner||'—'}</b></td>
           <td class="center">${notYet
             ? `<span class="badge-tag tag-pend" title="시행 예정 (${doneDate})">시행 전</span>`
-            : `<span class="badge-tag ${resCls}">${r.result||'미입력'}</span>`}</td>
+            : `<span class="badge-tag ${resCls}">${r.result||'미입력'}</span>${r.resultSource==='flyco'?` <i class="ti ti-file-check" style="color:var(--line);font-size:11px" title="심사결과분석(심사기록부 PDF)에서 자동 반영됨"></i>`:''}`}</td>
           <td class="center">
             <select class="filter-select" style="font-size:10px;padding:1px 2px;width:68px;border-radius:4px"
               ${notYet?`disabled title="심사 시행일(${doneDate}) 이후에 입력할 수 있어요"`:''}
@@ -2546,6 +2546,8 @@ function updateResult(id, val, selectEl) {
     }
   }
   row.result = val;
+  // 담당자가 직접 값을 바꾸면 PDF 자동반영 출처 표시는 지움 (이제부터는 수동 입력이 우선)
+  delete row.resultSource; delete row.resultSourceFile;
   // 결과가 확정되면 적격월(최근 심사일·만료일)도 다시 계산
   if(typeof computeQualmFromDB==='function') computeQualmFromDB();
   updateSidebarBadges();
@@ -4774,13 +4776,15 @@ async function processFlycoFiles(fileList) {
       added += recs.length;
     } catch(e) { console.warn('PDF 파싱 실패', f.name, e); failed++; }
   }
-  resolveFlycoIdentities(allNewRecs);
+resolveFlycoIdentities(allNewRecs);
   flycoDB.push(...allNewRecs);
+  const syncedCount = syncAllFlycoResultsToPlan();
   if (st) {
     st.style.display='block';
     const unmatchedExaminers = allNewRecs.filter(r=>!r.matchedExaminer).length;
     st.textContent = `✅ 파일 ${files.length}개 처리 · 심사기록 ${added}건 추출` + (failed?` · ⚠ ${failed}개 파일은 인식 실패(수동 확인 필요)`:'')
-      + (unmatchedExaminers?` · 심사관 ${unmatchedExaminers}건은 영문명 매칭 실패(심사관 관리에서 영문명 등록하면 자동 매칭돼요)`:'');
+      + (unmatchedExaminers?` · 심사관 ${unmatchedExaminers}건은 영문명 매칭 실패(심사관 관리에서 영문명 등록하면 자동 매칭돼요)`:'')
+      + (syncedCount?` · 🔄 심사결과 관리에 ${syncedCount}건 자동 반영됨`:'');
   }
   renderFlyco();
   saveFlycoToCloud();
@@ -4836,8 +4840,65 @@ function saveFlycoEdit() {
   r.date=g('flyco-edit-date'); r.score=g('flyco-edit-score'); r.result=g('flyco-edit-result'); r.examiner=g('flyco-edit-examiner');
   r.needsReview = !r.ac || !r.name || !r.date || !r.result;
   closeFlycoEditModal();
+  syncFlycoResultToPlan(r); // 담당자가 방금 확인/수정한 값이므로 바로 심사결과 관리에 반영
   renderFlyco();
   saveFlycoToCloud();
+}
+// ══════════════════════════════════════════════════════════════════
+// 심사결과분석 → 심사결과 관리 자동 동기화
+//   심사기록부 PDF에서 추출된 결과(합격/불합격)를 심사계획 관리(DB)의
+//   같은 사람·같은 심사일(±3일)·같은 기종/SIM-LINE 행에 자동으로 채워넣는다.
+//   ⚠ 이미 결과가 입력돼 있는 행은 절대 덮어쓰지 않는다 (수동 입력이 항상 우선).
+//   ⚠ 추출값에 오류 가능성이 있는(needsReview) 레코드는 자동 반영하지 않고,
+//     담당자가 수정 버튼으로 확인/저장한 뒤에만(saveFlycoEdit) 반영한다.
+// ══════════════════════════════════════════════════════════════════
+function findMatchingPlanRow(fr) {
+  if (!fr.empid || !fr.date) return null;
+  const candidates = DB.filter(d=>{
+    if (!d.empid || d.empid!==fr.empid) return false;
+    if (fr.ac && d.ac && d.ac!==fr.ac) return false;
+    if (fr.simline && d.simline && d.simline!==fr.simline) return false;
+    return true;
+  });
+  if (!candidates.length) return null;
+  const exact = candidates.find(d=>d.date===fr.date);
+  if (exact) return exact;
+  const target = new Date(fr.date).getTime();
+  let best=null, bestDiff=Infinity;
+  candidates.forEach(d=>{
+    const compDate = (typeof examCompletionDate==='function' ? examCompletionDate(d) : null) || d.date;
+    const diff = Math.abs(new Date(compDate).getTime() - target);
+    if (diff <= 3*24*3600*1000 && diff < bestDiff) { bestDiff=diff; best=d; }
+  });
+  return best;
+}
+function syncFlycoResultToPlan(fr) {
+  if (!fr.result) return false;
+  const row = findMatchingPlanRow(fr);
+  if (!row) { fr.planMatched=false; return false; }
+  fr.planMatched = true;
+  fr.planRowId = row.id;
+  if (row.result) {
+    fr.resultConflict = row.result !== fr.result; // 이미 입력된 결과와 다르면 표시만 (덮어쓰지 않음)
+    return false;
+  }
+  fr.resultConflict = false;
+  row.result = fr.result;
+  row.resultSource = 'flyco';
+  row.resultSourceFile = fr.filename || '';
+  return true;
+}
+function syncAllFlycoResultsToPlan() {
+  let changed = 0;
+  flycoDB.forEach(fr=>{ if(!fr.needsReview && syncFlycoResultToPlan(fr)) changed++; });
+  if (changed>0) {
+    if (typeof computeQualmFromDB==='function') computeQualmFromDB();
+    if (typeof updateSidebarBadges==='function') updateSidebarBadges();
+    if (typeof saveToStorage==='function') saveToStorage();
+    if ($('page-result')?.classList.contains('active') && typeof renderResult==='function') renderResult();
+    if ($('page-qualm')?.classList.contains('active') && typeof renderQualm==='function') renderQualm();
+  }
+  return changed;
 }
 
 function renderFlyco() {
