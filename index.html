@@ -4559,7 +4559,17 @@ function parseFlycoText(text, filename) {
     const isTrinityLine = /\(A?\d*\)?\s*CHECK\s*-\s*LINE/i.test(block) && !isKnowledge;
     const isTrinitySim = /FFS/i.test(titleLine) && !isKnowledge && !isTrinityLine;
     // CAT II/III(저시정운항, LVO) · EDTO 등 특수운항자격심사 체크폼 — 제목에 FFS가 없어 별도 인식 필요
-    const isTrinitySpecial = /Low\s*Visibility\s*Operations|LVO|CAT\s*(?:II|2)\s*\/?\s*(?:III|3)?|EDTO/i.test(titleLine) && !isKnowledge;
+    // ⚠ 단, "Recurrent FFS ... PC (CAT 2/3, UPRT)"처럼 정기 SIM 세션(PC=Proficiency Check)이
+    //   훈련 토픽으로 CAT/UPRT를 곁들이는 경우가 있어 제목만 보면 오탐(false positive)이 생김.
+    //   Training Type 필드가 실제 체크 종류를 가장 정확히 나타내므로, "PC"면 제목에 CAT가
+    //   있어도 무조건 정기로 취급하고, CATT/AWO가 있어야만 진짜 특수심사로 인정한다.
+    const trainTypeVal = (block.match(/Training Type\s+([\s\S]{1,60}?)(?:Duty code|Training\s*\/\s*Checkride|\n)/i) || [])[1]?.trim() || '';
+    const isRoutinePC = /^PC\b/i.test(trainTypeVal);
+    const isTrinitySpecial = !isRoutinePC && !isKnowledge && (
+      /AWO|CATT/i.test(trainTypeVal) ||
+      /Low\s*Visibility\s*Operations|\bLVO\b|EDTO/i.test(titleLine) ||
+      /CAT\s*(?:II|2)\s*\/?\s*(?:III|3)?/i.test(titleLine)
+    );
     const isOfficial = /운\s*항\s*자\s*격\s*심\s*사\s*표|기량심사표/i.test(block);
     // LIP/SIP(Line/Sim Instructor Pilot) 임무수행능력검증 — 교관 인정심사 체크폼. 제목에 FFS/LINE 키워드가 없어 별도 인식 필요
     const isLip = /LIP\s*\/\s*SIP|\bLIP\/SIP\b/i.test(titleLine) && !isKnowledge;
