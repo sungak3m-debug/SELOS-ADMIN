@@ -273,11 +273,11 @@ html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic'
 .cal-legend{display:flex;gap:12px;margin-left:auto;align-items:center}
 .cal-leg-item{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
 .cal-leg-dot{width:8px;height:8px;border-radius:2px}
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
 .cal-header{font-size:10px;font-weight:700;color:var(--muted);text-align:center;padding:6px 0;border-bottom:1px solid var(--border)}
 .cal-cell{
-  min-height:110px;padding:7px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);
-  position:relative;background:#fff;
+  min-height:110px;min-width:0;max-width:100%;padding:7px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);
+  position:relative;background:#fff;box-sizing:border-box;
 }
 .cal-cell:nth-child(7n){border-right:none}
 .cal-cell.other-month .cal-day{color:var(--hint)}
@@ -683,6 +683,19 @@ select{font-family:inherit}
 
       <!-- ─── 심사계획 관리 ─── -->
       <div class="page-section" id="page-plan">
+        <!-- SIM 스케줄(CAE KOREA/KE 운북 월간 캘린더) 엑셀 업로드 -->
+        <div class="upload-zone" style="padding:16px;margin-bottom:10px"
+          onclick="document.getElementById('sim-sched-file-input').click()"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="event.preventDefault();this.classList.remove('drag');processSimScheduleFile(event.dataTransfer.files[0])">
+          <i class="ti ti-calendar-plus" style="font-size:20px;display:block;margin-bottom:4px"></i>
+          <div style="font-weight:700;font-size:11px">SIM 스케줄 엑셀 업로드 (CAE KOREA / KE 운북 월간 캘린더)</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">CHK(정기·인정·특수) 항목만 자동 반영 · PT/TR/LOCAL/LIP양성은 스킵 · 인정심사 세부구분·자격·기종은 운항승무원 현황 기준 확인 필요할 수 있어요</div>
+        </div>
+        <input type="file" id="sim-sched-file-input" accept=".xlsx" style="display:none"
+          onchange="processSimScheduleFile(this.files[0]);this.value=''">
+        <div id="sim-sched-upload-status" style="font-size:11px;color:var(--green);margin-bottom:8px;display:none"></div>
         <div class="filter-bar">
           <div class="filter-item" style="position:relative">
             <span class="filter-label">Month</span>
@@ -709,6 +722,8 @@ select{font-family:inherit}
             <button class="btn btn-primary btn-sm" onclick="applyPlanFilter()"><i class="ti ti-search"></i> 조회</button>
             <button class="btn btn-outline btn-sm" onclick="resetPlanFilter()">초기화</button>
             <button class="btn btn-outline btn-sm" id="plan-bulk-delete-btn" onclick="deleteSelectedPlanRows()" style="color:var(--fail);border-color:#EDD0CC"><i class="ti ti-trash"></i> 선택삭제</button>
+            <button class="btn btn-outline btn-sm" onclick="dedupePlanRows()" title="같은 사람·날짜·심사종류로 중복 생성된 항목을 정리해요 (예: 심사결과분석 자동반영이 여러 번 겹친 경우)"><i class="ti ti-copy-off"></i> 중복 정리</button>
+            <button class="btn btn-outline btn-sm" onclick="autoPairSetRowsAll()" title="같은 날짜·편명/구간·심사관·심사장소·심사종류를 가진 서로 다른 두 사람의 개별 심사를 찾아 SET 심사로 묶어요"><i class="ti ti-link"></i> SET 자동결합</button>
             <button class="btn btn-excel btn-sm" id="plan-excel-btn" onclick="exportPlanExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('route-file-input').click()" title="편명·구간 2열 엑셀/CSV를 올리면 편명 입력 시 구간이 자동으로 채워져요">
               <i class="ti ti-route" style="font-size:12px"></i> 노선 마스터
@@ -842,6 +857,7 @@ select{font-family:inherit}
             <span class="table-title">심사결과 입력 <span class="badge-num" id="result-pending-badge" style="margin-left:6px"></span></span>
             <span style="font-size:10px;color:var(--muted);margin-left:8px"><span class="set-badge" style="font-size:8px;width:14px;height:14px;vertical-align:middle">S</span> = SET 심사 (피심사자 2명 동반)</span>
           </div>
+          <div id="result-qual-summary" style="font-size:11.5px;color:var(--text);font-weight:600;padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--border)"></div>
           <table class="tbl">
             <thead><tr>
               <th>No</th>
@@ -1177,12 +1193,13 @@ select{font-family:inherit}
             <span class="table-title">심사기록 검토 목록 <span style="font-size:10px;color:var(--muted);font-weight:500">— 자동 추출값 오류 발생할 경우 수정 가능</span></span>
             <span style="font-size:10.5px;color:var(--muted);margin-left:auto">
               <i class="ti ti-circle-check" style="color:var(--pass);font-size:12px"></i> 운항승무원 현황·심사관 관리에서 확인됨 &nbsp;
-              <i class="ti ti-help-circle" style="color:var(--hint);font-size:12px"></i> 미등록 (PDF 값 그대로 사용)
+              <span class="badge-tag tag-fail" style="font-size:9px;padding:1px 5px">⛔ 미등록</span> 심사관 관리에 없음(PDF 값 그대로 사용)
             </span>
           </div>
+          <div id="flyco-qual-summary" style="font-size:11.5px;color:var(--text);font-weight:600;padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--border)"></div>
           <table class="tbl">
             <thead><tr>
-              <th>기종</th><th>SIM/LINE</th><th>심사종류</th><th>자격</th>
+              <th>기종</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>자격</th>
               <th>사번</th><th>이름</th><th>심사일</th><th>총점</th><th class="center">결과</th>
               <th>심사관</th><th class="center">작업</th>
             </tr></thead>
@@ -1223,7 +1240,14 @@ select{font-family:inherit}
           <select class="form-control" id="flyco-edit-simline"><option value="LINE">LINE</option><option value="SIM">SIM</option></select>
         </div>
         <div class="form-group"><label class="form-label">심사종류</label>
-          <select class="form-control" id="flyco-edit-type"><option value="">선택</option><option>인정</option><option>정기</option><option>수시</option></select>
+          <select class="form-control" id="flyco-edit-type" onchange="updateFlycoEditSubtypeOptions()"><option value="">선택</option><option>인정</option><option>정기</option><option>수시</option><option>특수</option><option>LIP임무수행능력검증</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">세부구분</label>
+          <select class="form-control" id="flyco-edit-subtype">
+            <option value="">-</option>
+            <option>최초_초기</option><option>승격</option><option>전환</option><option>재자격</option>
+            <option>EDTO</option><option>CAT II/III</option>
+          </select>
         </div>
         <div class="form-group"><label class="form-label">자격</label>
           <select class="form-control" id="flyco-edit-qual">
@@ -1235,14 +1259,16 @@ select{font-family:inherit}
         <div class="form-group"><label class="form-label">이름</label>
           <input class="form-control" id="flyco-edit-name"></div>
         <div class="form-group"><label class="form-label">심사일</label>
-          <input class="form-control" id="flyco-edit-date" type="date"></div>
+          <input class="form-control" id="flyco-edit-date" type="date" min="1990-01-01" max="2099-12-31"></div>
         <div class="form-group"><label class="form-label">총점</label>
           <input class="form-control" id="flyco-edit-score" placeholder="1~5"></div>
         <div class="form-group"><label class="form-label">결과</label>
           <select class="form-control" id="flyco-edit-result"><option value="">선택</option><option>합격</option><option>불합격</option></select>
         </div>
         <div class="form-group full"><label class="form-label">심사관</label>
-          <input class="form-control" id="flyco-edit-examiner"></div>
+          <input class="form-control" id="flyco-edit-examiner" list="flyco-edit-examiner-list" autocomplete="off" placeholder="심사관 이름 입력 또는 선택">
+          <datalist id="flyco-edit-examiner-list"></datalist>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1398,22 +1424,32 @@ select{font-family:inherit}
         </div>
         <div class="form-group">
           <label class="form-label">심사과정</label>
-          <select class="form-control" id="fm-process">
+          <select class="form-control" id="fm-process" onchange="onProcessChange()">
             <option value="">선택</option>
             <option>기량</option><option>지식</option><option>지식+기량</option>
           </select>
         </div>
         <div class="form-group" id="fm-date-single-wrap">
           <label class="form-label">심사일</label>
-          <input class="form-control" id="fm-date" type="date">
+          <input class="form-control" id="fm-date" type="date" min="1990-01-01" max="2099-12-31">
         </div>
         <div class="form-group" id="fm-date-know-wrap" style="display:none">
           <label class="form-label">지식심사일</label>
-          <input class="form-control" id="fm-date-know" type="date">
+          <input class="form-control" id="fm-date-know" type="date" min="1990-01-01" max="2099-12-31">
         </div>
         <div class="form-group" id="fm-date-skill-wrap" style="display:none">
           <label class="form-label">기량심사일</label>
-          <input class="form-control" id="fm-date-skill" type="date">
+          <input class="form-control" id="fm-date-skill" type="date" min="1990-01-01" max="2099-12-31">
+        </div>
+        <div class="form-group full" id="fm-multiday-wrap" style="display:none">
+          <label class="form-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:600">
+            <input type="checkbox" id="fm-multiday" onchange="onMultidayToggle()" style="width:14px;height:14px">
+            왕복 다일 심사 (Out/In Bound — 하루에 안 끝나는 항공기 심사)
+          </label>
+        </div>
+        <div class="form-group" id="fm-date-end-wrap" style="display:none">
+          <label class="form-label">종료일 (In Bound)</label>
+          <input class="form-control" id="fm-date-end" type="date" min="1990-01-01" max="2099-12-31">
         </div>
         <div class="form-group">
           <label class="form-label">편명/구간</label>
@@ -1680,24 +1716,48 @@ function calEvClass(type) {
   return '정기';
 }
 
+// ⚠ 표의 모든 행이 같은 높이를 유지하도록 항상 한 줄(<br> 없이)만 반환한다.
+// 지식/기량 날짜 등 상세 정보는 title 툴팁(마우스 오버)으로만 보여준다.
 function getProcessDisp(r) {
   if (r.type==='인정') {
-    const tip = [r.placeKnow?`지식장소 ${r.placeKnow}`:'', r.placeSkill?`기량장소 ${r.placeSkill}`:''].filter(Boolean).join(' · ');
-    const t = tip ? ` title="${tip}"` : '';
-    if (r.dateKnow && r.dateSkill) return `<span${t}>지식+기량</span><br><span style="font-size:9px;color:var(--muted)">지식 ${r.dateKnow}<br>기량 ${r.dateSkill}</span>`;
-    if (r.dateSkill) return `<span${t}>기량</span><br><span style="font-size:9px;color:var(--muted)">${r.dateSkill}</span>`;
-    if (r.dateKnow) return `<span${t}>지식</span><br><span style="font-size:9px;color:var(--muted)">${r.dateKnow}</span>`;
+    const placeTip = [r.placeKnow?`지식장소 ${r.placeKnow}`:'', r.placeSkill?`기량장소 ${r.placeSkill}`:''].filter(Boolean).join(' · ');
+    if (r.dateKnow && r.dateSkill) {
+      const tip = [`지식 ${r.dateKnow} / 기량 ${r.dateSkill}`, placeTip].filter(Boolean).join(' · ');
+      return `<span title="${tip}">지식+기량</span>`;
+    }
+    if (r.dateSkill) return `<span${placeTip?` title="${placeTip}"`:''}>기량</span>`;
+    if (r.dateKnow) return `<span${placeTip?` title="${placeTip}"`:''}>지식</span>`;
   }
   return r.process || '—';
 }
-// CSV 등 일반 텍스트용 (HTML 태그 없는 버전)
+// CSV 등 일반 텍스트용 (HTML 태그 없는 버전) — 과정명만 반환, 날짜는 별도 시작일자/종료일자 컬럼에 넣는다
 function getProcessPlain(r) {
   if (r.type==='인정') {
-    if (r.dateKnow && r.dateSkill) return `지식+기량(지식 ${r.dateKnow} / 기량 ${r.dateSkill})`;
-    if (r.dateSkill) return `기량(${r.dateSkill})`;
-    if (r.dateKnow) return `지식(${r.dateKnow})`;
+    if (r.dateKnow && r.dateSkill) return '지식+기량';
+    if (r.dateSkill) return '기량';
+    if (r.dateKnow) return '지식';
   }
   return r.process || '';
+}
+// 엑셀/CSV 내보내기용 시작일자·종료일자 — 지식/기량 날짜가 다르면 그 두 날짜를, 다일심사(Out/In Bound)면
+// date~dateEnd를, 둘 다 아니면 심사일 하나만 시작일자에 넣고 종료일자는 비운다.
+function planExportDates(r) {
+  if (r.dateKnow && r.dateSkill && r.dateKnow !== r.dateSkill) {
+    return r.dateKnow < r.dateSkill ? { start:r.dateKnow, end:r.dateSkill } : { start:r.dateSkill, end:r.dateKnow };
+  }
+  if (r.dateEnd && r.dateEnd !== r.date) return { start:r.date, end:r.dateEnd };
+  return { start:r.date, end:'' };
+}
+// 왕복 다일 심사(Out/In Bound)면 "시작일 ~ 종료일"로 표시, 아니면 심사일 그대로
+// ⚠ 항상 한 줄로 반환 — 표의 모든 행 높이가 똑같이 유지되도록 <br>를 쓰지 않는다.
+function planDateDisp(r) {
+  if (r.dateEnd && r.dateEnd !== r.date) {
+    return `<span title="${r.date} ~ ${r.dateEnd}">${r.date} ~ ${r.dateEnd}</span>`;
+  }
+  return r.date;
+}
+function planDatePlain(r) {
+  return (r.dateEnd && r.dateEnd !== r.date) ? `${r.date} ~ ${r.dateEnd}` : r.date;
 }
 function exportCSV(headers, rows, filename) {
   const bom = '\uFEFF';
@@ -2415,6 +2475,10 @@ function closePlanModal() {
   const ph=$('fm-place-hint'); if(ph) ph.style.display='none';
   ['fm-place','fm-place-know','fm-place-skill'].forEach(id=>{ const el=$(id); if(el){ el.value=''; delete el.dataset.autofilled; } });
   if($('fm-nationality')) $('fm-nationality').value='내국인';
+  if($('fm-date-end')) $('fm-date-end').value='';
+  if($('fm-multiday')) $('fm-multiday').checked=false;
+  const mdWrap=$('fm-multiday-wrap'); if(mdWrap) mdWrap.style.display='none';
+  if(typeof onMultidayToggle==='function') onMultidayToggle();
   const panel=$('plan-modal-eligible-panel'); if(panel) panel.style.display='none';
   const icon=$('plan-modal-icon'); if(icon) icon.className='ti ti-plus';
   const title=$('plan-modal-title-text'); if(title) title.textContent='심사계획 추가';
@@ -2470,6 +2534,26 @@ function renderResult() {
   const pending = rows.filter(r=>!r.result).length;
   const badge=$('result-pending-badge');
   if(badge){badge.textContent=pending>0?pending+'건 미입력':'';badge.style.display=pending>0?'inline':'none';}
+
+  // 표 위 인원 요약 (심사결과분석 페이지와 동일한 기준) — 현재 필터(기종/SIM·LINE/심사종류/월)가 적용된 rows 기준.
+  //   위촉심사관은 이 페이지 데이터엔 examinerType이 없어서, 심사관 이름으로 심사관 관리를 조회해 판단한다.
+  {
+    const designatedNames = new Set(
+      (typeof examinerDB!=='undefined'?examinerDB:[])
+        .filter(e=>e.type==='사내 위촉심사관').map(e=>e.name)
+    );
+    const rqCapt = rows.filter(r=>r.qual==='기장'||r.qual==='훈련기장').length;
+    const rqFo = rows.filter(r=>r.qual==='부기장'||r.qual==='훈련부기장').length;
+    const rqInstructor = rows.filter(r=>r.qual==='교관').length;
+    const rqDesignated = rows.filter(r=>r.examiner && designatedNames.has(r.examiner)).length;
+    const rqOther = rows.length - rqCapt - rqFo - rqInstructor;
+    const rqEl = $('result-qual-summary');
+    if (rqEl) {
+      rqEl.innerHTML = `기장 ${rqCapt}명 · 부기장 ${rqFo}명 · 위촉심사관 ${rqDesignated}명 · 교관 ${rqInstructor}명`
+        + (rqOther>0 ? ` · 자격 미확인 ${rqOther}명` : '')
+        + ` · <span style="color:var(--line)">총 ${rows.length}명</span>`;
+    }
+  }
   const _now = new Date();
   const todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
   $('result-tbody').innerHTML = rows.length===0
@@ -2487,7 +2571,7 @@ function renderResult() {
           <td>${r.subtype||'—'}</td>
           <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
           <td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
-          <td>${r.empid||'—'}</td><td>${setBadge}${r.name}</td><td>${r.date}</td>
+          <td>${r.empid||'—'}</td><td>${setBadge}${r.name}</td><td>${planDateDisp(r)}</td>
           <td>${r.flight&&r.flight!=='—'?r.flight:r.place||'—'}</td>
           <td><b>${r.examiner||'—'}</b></td>
           <td class="center">${notYet
@@ -2512,7 +2596,7 @@ function renderResult() {
 }
 // 심사가 실제로 끝난 시점의 날짜. 인정심사는 지식/기량 중 나중 것이 끝나야 완료로 본다.
 function examCompletionDate(row) {
-  const cands = [row.date, row.dateKnow, row.dateSkill].filter(d=>d && d!=='—');
+  const cands = [row.date, row.dateKnow, row.dateSkill, row.dateEnd].filter(d=>d && d!=='—');
   if (!cands.length) return null;
   return cands.sort()[cands.length-1]; // 가장 늦은 날짜
 }
@@ -2580,8 +2664,8 @@ function exportResultExcel() {
     const cmp = va.localeCompare(vb, 'ko');
     return resultSortDir==='asc' ? cmp : -cmp;
   });
-  exportCSV(['No','SIM/LINE','심사종류','세부구분','과정','기종','자격','사번','이름','심사일','편명/구간','심사관','결과','비고','SET'],
-    rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,getProcessPlain(r),r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,r.result||'미입력',r.note||'',r.setId?'SET':'']),
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','과정','기종','자격','사번','이름','시작일자','종료일자','편명/구간','심사관','결과','비고','SET'],
+    rows.map((r,i)=>{ const {start,end}=planExportDates(r); return [i+1,r.simline,r.type,r.subtype,getProcessPlain(r),r.ac,r.qual,r.empid,r.name,start,end,r.flight,r.examiner,r.result||'미입력',r.note||'',r.setId?'SET':'']; }),
     `심사결과_${ry}년${rm}월_${ac}.csv`);
 }
 
@@ -2814,9 +2898,9 @@ function renderExaminer() {
       const periodCell = !isInhouse ? `<td style="color:var(--hint)">—</td>`
         : editing
           ? `<td><div style="display:flex;align-items:center;gap:3px">
-               <input type="date" class="filter-input" id="ex-inline-ps-${idx}" value="${pStart||''}" style="width:126px;font-size:10px;padding:3px 4px">
+               <input type="date" class="filter-input" id="ex-inline-ps-${idx}" value="${pStart||''}" style="width:126px;font-size:10px;padding:3px 4px" min="1990-01-01" max="2099-12-31">
                <span style="color:var(--muted);font-size:10px">~</span>
-               <input type="date" class="filter-input" id="ex-inline-pe-${idx}" value="${pEnd||''}" style="width:126px;font-size:10px;padding:3px 4px">
+               <input type="date" class="filter-input" id="ex-inline-pe-${idx}" value="${pEnd||''}" style="width:126px;font-size:10px;padding:3px 4px" min="1990-01-01" max="2099-12-31">
              </div></td>`
           : `<td>${(pStart||pEnd) ? `${pStart||''} ~ ${pEnd||''}` : '<span style="color:var(--hint)">—</span>'}</td>`;
 
@@ -3196,6 +3280,13 @@ const SUBTYPE_MAP = {
   '사내':              {subs:[],                                        procs:['기량','지식','지식+기량']},
   '':                  {subs:[],                                        procs:[]},
 };
+// 지식/기량 심사일이 다를 수 있어 날짜를 분리 입력해야 하는 심사종류인지 — SUBTYPE_MAP상
+// "지식+기량"이 유효한 과정으로 등록된 모든 종류에 적용한다(인정뿐 아니라 정기·수시 등도 포함 —
+// 예: SIM 위촉심사관 정기심사는 지식/기량이 서로 다른 날 시행되는 경우가 있음).
+function typeSupportsSplitDate(type) {
+  const cfg = SUBTYPE_MAP[type];
+  return !!(cfg && cfg.procs && cfg.procs.includes('지식+기량'));
+}
 
 function updateSubtypeOptions() {
   const type = $('fm-type')?.value || '';
@@ -3218,15 +3309,16 @@ function updateSubtypeOptions() {
       cfg.procs.map(p=>`<option value="${p}">${p}</option>`).join('');
   }
 
-  // 인정 심사는 지식/기량 심사일자가 다를 수 있어 날짜를 분리 입력
-  const isInjung = type === '인정';
+  // 지식/기량 심사일자가 다를 수 있는 심사종류는 날짜를 분리 입력 (인정뿐 아니라 정기 등도 포함 —
+  // SIM 위촉심사관 정기심사처럼 지식/기량이 다른 날 진행되는 경우가 있음)
+  const isInjung = typeSupportsSplitDate(type);
   const singleWrap = $('fm-date-single-wrap');
   const knowWrap = $('fm-date-know-wrap');
   const skillWrap = $('fm-date-skill-wrap');
   if (singleWrap) singleWrap.style.display = isInjung ? 'none' : '';
   if (knowWrap)   knowWrap.style.display   = isInjung ? '' : 'none';
   if (skillWrap)  skillWrap.style.display  = isInjung ? '' : 'none';
-  // 인정심사는 지식/기량이 다른 장소에서 시행될 수 있어 심사장소도 두 개로 분리
+  // 위와 동일한 이유로 심사장소도 두 개로 분리
   const pSingle = $('fm-place-single-wrap');
   const pKnow = $('fm-place-know-wrap');
   const pSkill = $('fm-place-skill-wrap');
@@ -3252,6 +3344,36 @@ function updateSubtypeOptions() {
   if (qh) {
     if (isLip) { qh.textContent = '(LIP 검증 — 교관으로 자동 지정)'; qh.style.color='var(--green)'; }
     else if (qh.textContent.includes('LIP')) { qh.textContent='(운항승무원 현황에서 자동 입력)'; qh.style.color='var(--muted)'; }
+  }
+
+  // 심사종류가 바뀌면 심사과정(지식/기량/지식+기량) 기준의 필드 제한도 다시 적용.
+  // (여기서는 화면 초기화 상황이라 값을 지우지 않고 보이기/숨기기만 맞춘다 — 값 삭제는
+  //  사용자가 직접 심사과정을 바꿀 때(onchange)만 일어난다)
+  onProcessChange(false);
+}
+
+// 심사과정(지식/기량/지식+기량)에 따라 인정심사의 지식·기량 날짜/장소 입력을 제한한다.
+//   지식 → 지식심사일·지식심사장소만 입력 가능(기량 필드는 숨김)
+//   기량 → 기량심사일·기량심사장소만 입력 가능
+//   지식+기량(또는 미선택) → 둘 다 입력 가능
+//   clearHidden=true(기본, 사용자가 직접 드롭다운을 바꿨을 때)면 숨긴 쪽 값도 비워서
+//   화면에 안 보이는 값이 저장 시 함께 딸려 들어가지 않게 한다. 수정 모달을 열 때처럼
+//   기존 값을 그대로 보여줘야 하는 초기화 상황에서는 false로 호출해 값을 보존한다.
+function onProcessChange(clearHidden) {
+  if (clearHidden === undefined) clearHidden = true;
+  if (!typeSupportsSplitDate($('fm-type')?.value || '')) return; // 지식/기량 분리 입력이 없는 심사종류는 건드리지 않음
+  const proc = $('fm-process')?.value || '';
+  const showKnow  = !proc || proc==='지식'   || proc==='지식+기량';
+  const showSkill = !proc || proc==='기량'   || proc==='지식+기량';
+  const knowWrap=$('fm-date-know-wrap'), skillWrap=$('fm-date-skill-wrap');
+  const pKnowWrap=$('fm-place-know-wrap'), pSkillWrap=$('fm-place-skill-wrap');
+  if (knowWrap)   knowWrap.style.display   = showKnow  ? '' : 'none';
+  if (pKnowWrap)  pKnowWrap.style.display  = showKnow  ? '' : 'none';
+  if (skillWrap)  skillWrap.style.display  = showSkill ? '' : 'none';
+  if (pSkillWrap) pSkillWrap.style.display = showSkill ? '' : 'none';
+  if (clearHidden) {
+    if (!showKnow)  { if($('fm-date-know'))  $('fm-date-know').value='';  if($('fm-place-know'))  $('fm-place-know').value=''; }
+    if (!showSkill) { if($('fm-date-skill')) $('fm-date-skill').value=''; if($('fm-place-skill')) $('fm-place-skill').value=''; }
   }
 }
 
@@ -3424,6 +3546,12 @@ function updatePlaceDatalist() {
 const DEFAULT_SIM_PLACE = 'CAE KOR';
 function onSimlineChange() {
   const sl = $('fm-simline')?.value;
+  const mdWrap = $('fm-multiday-wrap');
+  if (mdWrap) mdWrap.style.display = (sl==='LINE') ? '' : 'none';
+  if (sl !== 'LINE') {
+    if ($('fm-multiday')) $('fm-multiday').checked = false;
+    if (typeof onMultidayToggle==='function') onMultidayToggle();
+  }
   const placeEl = $('fm-place'), hint = $('fm-place-hint');
   if (!placeEl) return;
   if (sl === 'SIM') {
@@ -3442,6 +3570,18 @@ function onSimlineChange() {
 }
 // 사용자가 장소를 직접 수정하면 자동채움 표시 해제
 document.addEventListener('input', e=>{ if(e.target && e.target.id==='fm-place') delete e.target.dataset.autofilled; });
+// 왕복 다일 심사(Out/In Bound) 토글 — LINE 심사가 하루에 끝나지 않고 여러 날에 걸쳐 진행될 때 사용
+// 예) 지식심사·Out Bound 6/22, In Bound(도착) 6/25 → 시작일 6/22 ~ 종료일 6/25로 저장
+function onMultidayToggle() {
+  const on = !!$('fm-multiday')?.checked;
+  const endWrap = $('fm-date-end-wrap');
+  if (endWrap) endWrap.style.display = on ? '' : 'none';
+  if (!on && $('fm-date-end')) $('fm-date-end').value = '';
+  const lbl1 = $('fm-date-single-wrap')?.querySelector('.form-label');
+  if (lbl1) lbl1.textContent = on ? '심사일 (Out Bound)' : '심사일';
+  const lbl2 = $('fm-date-skill-wrap')?.querySelector('.form-label');
+  if (lbl2) lbl2.textContent = on ? '기량심사일 (Out Bound)' : '기량심사일';
+}
 
 // LINE 심사 편명/구간: 과거에 등록했던 값을 빈도순으로 추천
 function getFlightHistory() {
@@ -3609,6 +3749,10 @@ function showCalGroupPopup(event, ids) {
     ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);margin:6px 0 8px">
          <i class="ti ti-map-pin" style="font-size:13px;color:var(--muted)"></i>${e.place}
        </div>` : '';
+  const dateRangeRow = (e.dateEnd && e.dateEnd !== e.date)
+    ? `<div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);margin:2px 0 8px">
+         <i class="ti ti-calendar-time" style="font-size:13px;color:var(--muted)"></i>${e.date} ~ ${e.dateEnd}
+       </div>` : '';
   const noteBlock = (e.note && e.note!=='—')
     ? `<div style="margin-top:8px;padding:8px;background:var(--bg);border-radius:6px;display:flex;gap:6px">
          <i class="ti ti-note" style="font-size:13px;color:var(--muted);flex-shrink:0;margin-top:1px"></i>
@@ -3623,6 +3767,7 @@ function showCalGroupPopup(event, ids) {
       <button style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:13px" onclick="this.closest('.cal-popup').remove()">✕</button>
     </div>
     ${placeRow}
+    ${dateRangeRow}
     <div style="font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.5px;margin-bottom:2px">피심사자 (${rows.length}명)</div>
     ${personRows}
     ${noteBlock}`;
@@ -3735,9 +3880,9 @@ openExaminerDrawer = function() {
         <div class="form-group full"><label class="form-label">심사관코드 <span style="font-weight:400;color:var(--muted)">(국토부 제출용, 예: DCP1717)</span></label>
           <input class="form-control" id="ex-code" placeholder="예) DCP1717"></div>
         <div class="form-group"><label class="form-label">위촉 시작일</label>
-          <input class="form-control" id="ex-period-start" type="date"></div>
+          <input class="form-control" id="ex-period-start" type="date" min="1990-01-01" max="2099-12-31"></div>
         <div class="form-group"><label class="form-label">위촉 종료일</label>
-          <input class="form-control" id="ex-period-end" type="date"></div>
+          <input class="form-control" id="ex-period-end" type="date" min="1990-01-01" max="2099-12-31"></div>
         <div class="form-group"><label class="form-label">SIM 심사</label>
           <select class="form-control" id="ex-sim"><option value="true">가능</option><option value="false">불가</option></select>
         </div>
@@ -3857,19 +4002,21 @@ const _savePlanBase2 = savePlanRow;
 savePlanRow = function() {
   const g = id => $(id)?.value.trim()||'';
   const type = g('fm-type');
-  const isInjung = type === '인정';
+  const isInjung = typeSupportsSplitDate(type);
   let date, dateKnow='', dateSkill='';
   if (isInjung) {
     dateKnow = g('fm-date-know'); dateSkill = g('fm-date-skill');
-    if (!dateKnow && !dateSkill) { alert('인정 심사는 지식심사일 또는 기량심사일 중 하나 이상 입력해야 합니다.'); return; }
+    if (!dateKnow && !dateSkill) { alert('지식심사일 또는 기량심사일 중 하나 이상 입력해야 합니다.'); return; }
     date = dateSkill || dateKnow; // 정렬/필터 기준일: 기량일 우선, 없으면 지식일
   } else {
     date = g('fm-date');
   }
   const process = g('fm-process');
+  const isMultiday = g('fm-simline')==='LINE' && !!$('fm-multiday')?.checked;
   const common = {
     simline:g('fm-simline'),ac:g('fm-ac'),type,subtype:g('fm-subtype'),process,
     date, dateKnow: isInjung?dateKnow:'', dateSkill: isInjung?dateSkill:'',
+    dateEnd: isMultiday ? g('fm-date-end') : '',
     flight:g('fm-flight')||'—',examiner:g('fm-examiner')||'—',
     place: isInjung ? (g('fm-place-skill')||g('fm-place-know')||'—') : (g('fm-place')||'—'),
     placeKnow: isInjung ? g('fm-place-know') : '',
@@ -3878,6 +4025,11 @@ savePlanRow = function() {
     nationality: g('fm-nationality')||'내국인'
   };
   if(!common.simline||!common.ac||!common.type||!date){alert('SIM/LINE, 기종, 심사종류, 심사일은 필수입니다.');return;}
+  // 심사관 컬럼에는 심사관 관리에 등록된 이름만 들어갈 수 있게 제한 (직접 입력한 임의 텍스트 저장 방지)
+  if (common.examiner!=='—' && typeof examinerDB!=='undefined' && !examinerDB.some(e=>e.name===common.examiner)) {
+    alert(`⛔ "${common.examiner}"은(는) 심사관 관리에 등록되지 않은 이름이에요.\n\n심사관 목록에서 선택하거나, 먼저 심사관 관리 페이지에서 등록해주세요.`);
+    return;
+  }
 
   const editId = g('fm-edit-id');
 
@@ -3931,24 +4083,42 @@ savePlanRow = function() {
 
   if (editId) {
     // ── 수정 모드 ──
-    if (editSetId) {
-      const pair = DB.filter(r=>r.setId===editSetId).sort((a,b)=>(a.setSeq||0)-(b.setSeq||0));
+    // ⚠ addMode(단독/SET 탭)를 반드시 기준으로 삼는다 — 원래 SET이었는지(editSetId)만 보고
+    //   분기하면, 개별 심사를 편집 화면에서 "SET 심사" 탭으로 바꿔 저장해도 무시되고 계속
+    //   개별로만 저장되는 버그가 있었다(반대로 SET → 단독 전환도 마찬가지로 막혀 있었음).
+    if (addMode==='set') {
       const p1 = resolveSetPerson('fm-empid-c','fm-name-c','fm-qual-c');
       const p2 = resolveSetPerson('fm-empid-f','fm-name-f','fm-qual-f');
       if(!p1.name||!p2.name){alert('SET 심사: 피심사자 2명의 이름을 모두 입력하세요.');return;}
       if(!p1.qual||!p2.qual){alert('SET 심사: 자격을 확인할 수 없는 피심사자가 있어요. 자격을 직접 선택해주세요.');return;}
-      pair.forEach((r,i)=>{
-        Object.assign(r, common);
-        const p = (r.setSeq===2 || (!r.setSeq && i===1)) ? p2 : p1;
-        r.name=p.name; r.empid=p.empid; r.qual=p.qual;
-        r.setSeq = (p===p1) ? 1 : 2;
-      });
+      if (editSetId) {
+        // 이미 SET인 심사를 수정
+        const pair = DB.filter(r=>r.setId===editSetId).sort((a,b)=>(a.setSeq||0)-(b.setSeq||0));
+        pair.forEach((r,i)=>{
+          Object.assign(r, common);
+          const p = (r.setSeq===2 || (!r.setSeq && i===1)) ? p2 : p1;
+          r.name=p.name; r.empid=p.empid; r.qual=p.qual;
+          r.setSeq = (p===p1) ? 1 : 2;
+        });
+      } else {
+        // 개별 심사 → SET 전환: 수정 중이던 행을 1번으로 재사용하고, 2번 피심사자는 새 행으로 추가
+        const row = DB.find(r=>r.id===Number(editId));
+        if(!row){alert('수정할 심사를 찾을 수 없습니다.');return;}
+        const setId='S'+nextId;
+        Object.assign(row, common, {qual:p1.qual, empid:p1.empid, name:p1.name, setId, setSeq:1});
+        DB.push({...common,id:nextId++,qual:p2.qual,name:p2.name,empid:p2.empid,setId,setSeq:2,result:''});
+      }
     } else {
       const row = DB.find(r=>r.id===Number(editId));
       if(!row){alert('수정할 심사를 찾을 수 없습니다.');return;}
       const qual=g('fm-qual'),empid=g('fm-empid'),name=g('fm-name');
       if(!name){alert('피심사자 이름은 필수입니다.');return;}
-      Object.assign(row, common, {qual,empid,name});
+      if (editSetId) {
+        // SET 심사 → 단독 전환: 수정 중인 이 행만 SET에서 빼고, 남은 짝은 단독 심사로 남겨둔다
+        const partner = DB.find(r=>r.setId===editSetId && r.id!==row.id);
+        if (partner) { partner.setId=null; partner.setSeq=null; }
+      }
+      Object.assign(row, common, {qual,empid,name,setId:null,setSeq:null});
     }
   } else if(addMode==='set'){
     const p1 = resolveSetPerson('fm-empid-c','fm-name-c','fm-qual-c');
@@ -3987,7 +4157,7 @@ function editPlanRow(id) {
   updateSubtypeOptions();
   $('fm-subtype').value = row.subtype||'';
   $('fm-process').value = row.process||'';
-  if (row.type==='인정') {
+  if (typeSupportsSplitDate(row.type)) {
     $('fm-date-know').value = row.dateKnow||'';
     $('fm-date-skill').value = row.dateSkill||row.date||'';
   } else {
@@ -3998,6 +4168,15 @@ function editPlanRow(id) {
   $('fm-place').value = (row.place&&row.place!=='—')?row.place:'';
   if($('fm-place-know'))  $('fm-place-know').value  = row.placeKnow||'';
   if($('fm-place-skill')) $('fm-place-skill').value = row.placeSkill||'';
+  // 이 행의 실제 심사과정(row.process) 기준으로 지식/기량 필드 보이기·숨기기를 다시 맞춘다.
+  // (updateSubtypeOptions()가 위에서 한 번 호출됐지만, 그때는 fm-process가 아직 이전 값이었음)
+  // 기존 값은 그대로 보여줘야 하므로 값은 지우지 않는다(false).
+  onProcessChange(false);
+  const mdWrapEdit = $('fm-multiday-wrap');
+  if (mdWrapEdit) mdWrapEdit.style.display = (row.simline==='LINE') ? '' : 'none';
+  if ($('fm-multiday')) $('fm-multiday').checked = !!row.dateEnd;
+  if ($('fm-date-end')) $('fm-date-end').value = row.dateEnd||'';
+  if (typeof onMultidayToggle==='function') onMultidayToggle();
   $('fm-note').value = row.note||'';
   if($('fm-nationality')) $('fm-nationality').value = row.nationality||'내국인';
   if($('fm-place')) delete $('fm-place').dataset.autofilled; // 수정 모드에선 기존 장소를 사용자 값으로 취급
@@ -4182,8 +4361,8 @@ exportPlanExcel = function(){
     const cmp = va.localeCompare(vb, 'ko');
     return planSortDir==='asc' ? cmp : -cmp;
   });
-  exportCSV(['No','SIM/LINE','심사종류','세부구분','과정','기종','자격','사번','이름','심사일정','편명/구간','심사관','심사장소','비고','SET'],
-    rows.map((r,i)=>[i+1,r.simline,r.type,r.subtype,getProcessPlain(r),r.ac,r.qual,r.empid,r.name,r.date,r.flight,r.examiner,r.place,r.note||'',r.setId?'SET':'']),
+  exportCSV(['No','SIM/LINE','심사종류','세부구분','과정','기종','자격','사번','이름','시작일자','종료일자','편명/구간','심사관','심사장소','비고','SET'],
+    rows.map((r,i)=>{ const {start,end}=planExportDates(r); return [i+1,r.simline,r.type,r.subtype,getProcessPlain(r),r.ac,r.qual,r.empid,r.name,start,end,r.flight,r.examiner,r.place,r.note||'',r.setId?'SET':'']; }),
     `심사계획_${planYear}년${planMonth}월_${ac}.csv`);
 };
 
@@ -4378,6 +4557,295 @@ processExcelFile = async function(file){
 
 
 // ── 적격월 업로드 ──
+// ══════════════════════════════════════════════════════════════════
+// SIM 스케줄 엑셀(CAE KOREA / KE 운북 월간 캘린더) → 심사계획 자동 반영
+//   시설1(CAE KOREA→CAE KOR): MAINT(4행 특수블록) + S0~S4(5행: 종류/세부구분/이름1/이름2/심사관)
+//   시설2(KE 운북→KE ICN): K5,K1~K4 (시설1과 동일한 5행 구조)
+//   지식심사 미니테이블(날짜 헤더 5행 위, 오전/오후/심사관/심사장소)은 같은 열=같은 날짜로 매핑되며
+//   인정심사의 지식심사(dateKnow)로 병합된다.
+//   CHK(정기·인정·특수)만 반영하고 PT/TR/LOCAL/LIP+양성 조합은 스킵(훈련·해당없음).
+//   괄호로 감싼 이름, 또는 "이름(F)/(이름2)"에서 슬래시 뒤 이름은 SIM지원(피심사자 아님)으로 제외.
+//   ⚠ 이 템플릿(시설·세션 배치)은 매달 고정이라는 전제로 상대 행 오프셋을 하드코딩했다.
+// ══════════════════════════════════════════════════════════════════
+const SIM_FACILITY_MAP = { 'CAE KOREA':'CAE KOR', 'KE 운북':'KE ICN' };
+const SIM_SCHEDULE_TEMPLATE = [
+  {kind:'maint', label:'MAINT', rowOffsets:[2,3,4,5]},
+  {kind:'std',   label:'S0',   rowOffsets:[7,8,9,10,11]},
+  {kind:'std',   label:'S1',   rowOffsets:[13,14,15,16,17]},
+  {kind:'std',   label:'S2',   rowOffsets:[19,20,21,22,23]},
+  {kind:'std',   label:'S3',   rowOffsets:[25,26,27,28,29]},
+  {kind:'std',   label:'S4',   rowOffsets:[31,32,33,34,35]},
+  {kind:'std',   label:'K5',   rowOffsets:[42,43,44,45,46], facility2:true},
+  {kind:'std',   label:'K1',   rowOffsets:[48,49,50,51,52], facility2:true},
+  {kind:'std',   label:'K2',   rowOffsets:[54,55,56,57,58], facility2:true},
+  {kind:'std',   label:'K3',   rowOffsets:[60,61,62,63,64], facility2:true},
+  {kind:'std',   label:'K4',   rowOffsets:[66,67,68,69,70], facility2:true},
+];
+const SIM_FACILITY2_NAME_OFFSET = 39;
+
+function simCellStr(v) {
+  if (v === null || v === undefined) return '';
+  if (v instanceof Date) return '';
+  return String(v).trim();
+}
+// 괄호/슬래시 규칙으로 실제 피심사자만 추출. SIM지원(동승만 함, 심사대상 아님)은 null.
+//   "하효성(C)" → {name:'하효성', qualHint:'기장'} · "(조강희)" → null
+//   "서우석(F)/(하효성)" → {name:'서우석', qualHint:'부기장'} (슬래시 뒤는 SIM지원이라 버림)
+function parseSimName(raw) {
+  let s = simCellStr(raw);
+  if (!s) return null;
+  if (/^\(.+\)$/.test(s)) return null;
+  if (s.includes('/')) s = s.split('/')[0].trim();
+  if (!s || /^\(.+\)$/.test(s)) return null;
+  const m = s.match(/^(.+?)\(([CF])\)$/);
+  if (m) return { name: m[1].trim(), qualHint: m[2]==='C' ? '기장' : '부기장' };
+  return { name: s, qualHint: null };
+}
+// parseSimName이 버리는 SIM지원(동승, 심사대상 아님) 이름을 달력 표시용으로 별도 추출.
+//   "(조강희)" → ['조강희'] · "서우석(F)/(하효성)" → ['하효성'] · 그 외(지원 없음) → []
+function extractSimSupportNames(raw) {
+  const s = simCellStr(raw);
+  if (!s) return [];
+  if (/^\(.+\)$/.test(s)) return [s.slice(1,-1).trim()].filter(Boolean);
+  if (s.includes('/')) {
+    return s.split('/').slice(1).map(part=>{
+      const t = part.trim();
+      const m2 = t.match(/^\((.+)\)$/);
+      return (m2 ? m2[1] : t).trim();
+    }).filter(Boolean);
+  }
+  return [];
+}
+// 종류/세부구분 조합 → {examType, subtypeField}. null이면 스킵 대상(훈련/해당없음/미인식).
+function mapSimTypeSubtype(type, subtype) {
+  const t = simCellStr(type), s = simCellStr(subtype);
+  if (s === 'PT') return null;                   // Training — 스킵
+  if (s === 'LOCAL') return null;                 // CHK 아님 — 스킵
+  if (t === 'LIP' && s === '양성') return null;   // 해당 없음 — 스킵
+  if (/TR$/.test(s)) return null;                 // EDTO TR / CAT II/III TR — 스킵
+  if (s === 'PC') return { examType:'정기', subtypeField:'' };
+  if (s === '인정심사') return { examType:'인정', subtypeField:'' };
+  if (s === 'EDTO CHK') return { examType:'특수', subtypeField:'EDTO' };
+  if (s === 'CAT II/III CHK') return { examType:'특수', subtypeField:'CAT II/III' };
+  return null;
+}
+// MAINT 블록은 종류+세부구분이 한 셀에 합쳐져 있음 (예: "EDTO CHK", "LIP 정기")
+function mapSimMaintCombined(combined) {
+  const v = simCellStr(combined);
+  if (!v) return null;
+  if (/TR/.test(v)) return null;
+  if (v === 'LIP 정기') return null; // 사용자 확인: 반영 불필요
+  if (/EDTO/.test(v) && /CHK/.test(v)) return { examType:'특수', subtypeField:'EDTO' };
+  if (/CAT/.test(v) && /CHK/.test(v)) return { examType:'특수', subtypeField:'CAT II/III' };
+  return null;
+}
+function lookupCrewByName(name) {
+  if (!name || typeof crewDB==='undefined') return null;
+  const matches = crewDB.filter(c=>c.name===name);
+  return matches.length===1 ? matches[0] : null;
+}
+async function processSimScheduleFile(file) {
+  if (!file) return;
+  await ensureXLSXLoaded();
+  const st = $('sim-sched-upload-status');
+  const setStatus = (text, color) => { if(st){ st.style.display='block'; if(color) st.style.color=color; st.textContent=text; } };
+  let wb;
+  try {
+    const ab = await file.arrayBuffer();
+    wb = XLSX.read(ab, {type:'array', raw:true}); // cellDates 미사용 — 엑셀 날짜 시리얼을 UTC 기준으로 직접 변환해 타임존 오차를 피함
+  } catch(e) { setStatus('⚠ 엑셀을 읽지 못했어요: '+e.message, 'var(--fail)'); return; }
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+
+  // 엑셀 날짜 시리얼 → 'YYYY-MM-DD' (cellDates:true로 Date 객체를 받으면 타임존에 따라 하루 밀리는 문제가 있어 시리얼을 직접 변환)
+  function simSerialToDateStr(serial) {
+    const ms = Math.round((serial - 25569) * 86400 * 1000);
+    const d = new Date(ms);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+  }
+  function simSerialDay(serial) {
+    const ms = Math.round((serial - 25569) * 86400 * 1000);
+    return new Date(ms).getUTCDate();
+  }
+  // ① 날짜 헤더(anchor) 행 탐색 — 3번째 칸(0-index 2)부터 1일을 나타내는 날짜 시리얼이 시작되는 행
+  let anchor = -1;
+  for (let r=0; r<grid.length; r++) {
+    const row = grid[r]; if (!row) continue;
+    const c2 = row[2];
+    if (typeof c2 === 'number' && c2 > 0 && simSerialDay(c2) === 1) { anchor = r; break; }
+  }
+  if (anchor < 0) { setStatus('⚠ 날짜 헤더를 찾지 못했어요. SIM 스케줄 양식(CAE KOREA/KE 운북 월간 캘린더)이 맞는지 확인해주세요.', 'var(--fail)'); return; }
+
+  // ② 열(column) → 날짜 매핑
+  const dateMap = {};
+  const anchorRow = grid[anchor] || [];
+  for (let c=2; c<anchorRow.length; c++) {
+    const v = anchorRow[c];
+    if (typeof v === 'number' && v > 0) dateMap[c] = simSerialToDateStr(v);
+  }
+  const dateCols = Object.keys(dateMap).map(Number);
+  if (!dateCols.length) { setStatus('⚠ 날짜 열을 인식하지 못했어요.', 'var(--fail)'); return; }
+
+  const cell = (r,c) => (grid[r] ? grid[r][c] : null);
+
+  // ③ 시설명
+  const facility1Raw = simCellStr(cell(anchor,0));
+  const facility1 = SIM_FACILITY_MAP[facility1Raw] || facility1Raw || 'CAE KOR';
+  const facility2Raw = simCellStr(cell(anchor+SIM_FACILITY2_NAME_OFFSET,0));
+  const facility2 = SIM_FACILITY_MAP[facility2Raw] || facility2Raw || 'KE ICN';
+
+  // ④ 지식심사 미니테이블 (anchor-5~anchor-2행: 오전/오후/심사관/심사장소) — 열은 날짜 그리드와 동일
+  const knowledgeMap = {}; // name -> {date, examiner, place, qualHint, consumed}
+  const KNOW_AM_OFF=-5, KNOW_PM_OFF=-4, KNOW_EXAMINER_OFF=-3, KNOW_PLACE_OFF=-2;
+  dateCols.forEach(c=>{
+    [KNOW_AM_OFF, KNOW_PM_OFF].forEach(off=>{
+      const raw = cell(anchor+off, c);
+      const parsed = parseSimName(raw);
+      if (!parsed) return;
+      knowledgeMap[parsed.name] = {
+        date: dateMap[c],
+        examiner: simCellStr(cell(anchor+KNOW_EXAMINER_OFF, c)) || '—',
+        place: simCellStr(cell(anchor+KNOW_PLACE_OFF, c)) || '—',
+        qualHint: parsed.qualHint,
+        consumed: false
+      };
+    });
+  });
+
+  // ⑤ 메인 그리드(세션 블록) 파싱
+  const candidates = [];
+  SIM_SCHEDULE_TEMPLATE.forEach(sess=>{
+    const facility = sess.facility2 ? facility2 : facility1;
+    dateCols.forEach(c=>{
+      let mapped, name1Raw, name2Raw, examinerRaw;
+      if (sess.kind === 'maint') {
+        mapped = mapSimMaintCombined(cell(anchor+sess.rowOffsets[0], c));
+        name1Raw = cell(anchor+sess.rowOffsets[1], c);
+        name2Raw = cell(anchor+sess.rowOffsets[2], c);
+        examinerRaw = cell(anchor+sess.rowOffsets[3], c);
+      } else {
+        mapped = mapSimTypeSubtype(cell(anchor+sess.rowOffsets[0], c), cell(anchor+sess.rowOffsets[1], c));
+        name1Raw = cell(anchor+sess.rowOffsets[2], c);
+        name2Raw = cell(anchor+sess.rowOffsets[3], c);
+        examinerRaw = cell(anchor+sess.rowOffsets[4], c);
+      }
+      if (!mapped) return;
+      const p1 = parseSimName(name1Raw);
+      const p2 = parseSimName(name2Raw);
+      if (!p1 && !p2) return;
+      const support = [...extractSimSupportNames(name1Raw), ...extractSimSupportNames(name2Raw)];
+      candidates.push({
+        examType: mapped.examType, subtypeField: mapped.subtypeField,
+        facility, examiner: simCellStr(examinerRaw) || '—',
+        date: dateMap[c], people: [p1, p2].filter(Boolean), sessionLabel: sess.label, support
+      });
+    });
+  });
+
+  // ⑥ 지식심사 병합 + DB 행 생성
+  const newRows = [];
+  let addedCount = 0, dupCount = 0, reviewCount = 0;
+
+  function existsInDB(name, date, examType, empid) {
+    return DB.some(r=>r.simline==='SIM' && r.date===date && r.type===examType &&
+      ((empid && r.empid===empid) || (!empid && r.name===name)));
+  }
+  function resolvePerson(p) {
+    const crew = lookupCrewByName(p.name);
+    return {
+      name: p.name, qual: p.qualHint || crew?.qual || '',
+      ac: crew?.ac || (typeof currentUser!=='undefined' && currentUser?.ac) || 'A330',
+      empid: crew?.empid || '', matchedCrew: !!crew
+    };
+  }
+
+  candidates.forEach(cand=>{
+    const isInjung = cand.examType === '인정';
+    const resolved = cand.people.map(resolvePerson);
+    const knows = resolved.map(p => isInjung ? knowledgeMap[p.name] : null);
+    knows.forEach(k=>{ if(k) k.consumed = true; });
+
+    const startLen = newRows.length;
+    resolved.forEach((p,i)=>{
+      if (existsInDB(p.name, cand.date, cand.examType, p.empid)) { dupCount++; return; }
+      let subtypeField = cand.subtypeField;
+      let needsReview = false, reviewNotes = [];
+      if (isInjung && !subtypeField) {
+        const crew = lookupCrewByName(p.name);
+        const guess = crew ? inferSubtypeFromCrew(crew) : null;
+        if (guess) subtypeField = guess; else { needsReview = true; reviewNotes.push('세부구분 확인 필요'); }
+      }
+      if (!p.qual) { needsReview = true; reviewNotes.push('자격 확인 필요'); }
+      if (!p.matchedCrew) { needsReview = true; reviewNotes.push('운항승무원 현황 미매칭'); }
+      const k = knows[i];
+      const dateSkill = cand.date, dateKnow = k ? k.date : '';
+      const row = {
+        id: nextId++, simline: 'SIM', type: cand.examType, subtype: subtypeField || '',
+        process: isInjung ? (dateKnow ? '지식+기량' : '기량') : '기량',
+        ac: p.ac, qual: p.qual, empid: p.empid, name: p.name,
+        date: isInjung ? (dateSkill||dateKnow) : dateSkill,
+        dateKnow: isInjung ? dateKnow : '', dateSkill: isInjung ? dateSkill : '',
+        flight: cand.sessionLabel || '—', examiner: cand.examiner, place: cand.facility,
+        simSupport: cand.support && cand.support.length ? cand.support : undefined,
+        note: needsReview ? ('⚠ SIM 자동반영 - '+reviewNotes.join(', ')) : '',
+        setId: null, setSeq: null, result: ''
+      };
+      if (needsReview) reviewCount++;
+      newRows.push(row); addedCount++;
+    });
+    const addedForThisCand = newRows.slice(startLen);
+    if (resolved.length === 2 && addedForThisCand.length === 2) {
+      const setId = 'SIM'+addedForThisCand[0].id;
+      addedForThisCand[0].setId = setId; addedForThisCand[0].setSeq = 1;
+      addedForThisCand[1].setId = setId; addedForThisCand[1].setSeq = 2;
+    }
+  });
+
+  // 짝을 못 찾은(기량 없이 지식심사만 있는) 인정심사 지식심사 단독 반영
+  Object.entries(knowledgeMap).forEach(([name, k])=>{
+    if (k.consumed) return;
+    const crew = lookupCrewByName(name);
+    if (existsInDB(name, k.date, '인정', crew?.empid)) { dupCount++; return; }
+    const guess = crew ? inferSubtypeFromCrew(crew) : null;
+    newRows.push({
+      id: nextId++, simline:'SIM', type:'인정', subtype: guess||'',
+      process:'지식', ac: crew?.ac || (typeof currentUser!=='undefined'&&currentUser?.ac) || 'A330',
+      qual: k.qualHint || crew?.qual || '', empid: crew?.empid||'', name,
+      date: k.date, dateKnow: k.date, dateSkill:'',
+      flight:'—', examiner:k.examiner, place:k.place,
+      note: '⚠ SIM 자동반영 - 짝이 되는 기량(SIM CHK) 일정을 찾지 못했어요. 세부구분/기량일 확인 필요',
+      setId:null, setSeq:null, result:''
+    });
+    reviewCount++; addedCount++;
+  });
+
+  if (!newRows.length) {
+    setStatus(dupCount>0 ? `이미 반영된 항목뿐이에요 (중복 ${dupCount}건 스킵).` : '반영할 CHK 항목을 찾지 못했어요.', 'var(--muted)');
+    return;
+  }
+
+  DB.push(...newRows);
+  if (typeof computeQualmFromDB==='function') computeQualmFromDB();
+  if (typeof updateSidebarBadges==='function') updateSidebarBadges();
+
+  const latestDate = newRows.map(r=>r.date).filter(Boolean).sort().pop();
+  if (latestDate) {
+    const [ly, lm] = latestDate.split('-').map(Number);
+    if (typeof planYear!=='undefined') { planYear = ly; planMonth = lm; }
+    if (typeof calYear!=='undefined')  { calYear = ly; calMonth = lm; }
+    if (typeof resultYear!=='undefined'){ resultYear = ly; resultMonth = lm; }
+  }
+  if (typeof renderPlan==='function') renderPlan();
+  if (typeof renderQualm==='function') renderQualm();
+  if (typeof renderCal==='function') renderCal();
+  if (typeof renderResult==='function') renderResult();
+  if (typeof saveToStorage==='function') saveToStorage();
+
+  setStatus(`✅ ${addedCount}건 반영 (시설: ${facility1}${facility2Raw?' · '+facility2:''})` +
+    (dupCount ? ` · 중복 ${dupCount}건 스킵` : '') +
+    (reviewCount ? ` · ⚠ 검토 필요 ${reviewCount}건 (비고란 확인)` : ''), 'var(--green)');
+}
+
 async function processQualmFile(file){
   if(!window.XLSX){
     const s=document.createElement('script');
@@ -4572,7 +5040,8 @@ function parseFlycoText(text, filename) {
     );
     const isOfficial = /운\s*항\s*자\s*격\s*심\s*사\s*표|기량심사표/i.test(block);
     // LIP/SIP(Line/Sim Instructor Pilot) 임무수행능력검증 — 교관 인정심사 체크폼. 제목에 FFS/LINE 키워드가 없어 별도 인식 필요
-    const isLip = /LIP\s*\/\s*SIP|\bLIP\/SIP\b/i.test(titleLine) && !isKnowledge;
+    //   "LIP/SIP" 서식과 "(A330) LIP VALIDATION SHEET" 서식 둘 다 인식 (필드 라벨이 서로 다름 — 아래 개별 처리)
+    const isLip = (/LIP\s*\/\s*SIP|\bLIP\/SIP\b/i.test(titleLine) || /LIP\s*VALIDATION(?:\s*SHEET)?/i.test(titleLine)) && !isKnowledge;
     if (!isKnowledge && !isTrinityLine && !isTrinitySim && !isTrinitySpecial && !isOfficial && !isLip) return; // 인식 안 되는 블록은 무시
 
     const rec = {
@@ -4597,8 +5066,11 @@ function parseFlycoText(text, filename) {
     else if (isLip) rec.simline = /SIM|SIP/i.test(titleLine) ? 'SIM' : 'LINE';
 
     // 자격: Trainee Role / 국토부 체크박스(■ CAP,F/O) / Duty code / 제목의 <CAPT> 표기
-    const roleM = block.match(/Trainee Role\s+(기장|부기장|훈련부기장)/) || block.match(/■\s*(CAP|F\/O)/);
-    if (roleM) rec.qual = roleM[1]==='CAP' ? '기장' : roleM[1]==='F/O' ? '부기장' : roleM[1].replace('훈련','');
+    const roleM = block.match(/Trainee Role\s+(훈련기장|훈련부기장|기장|부기장)/) || block.match(/■\s*(CAP|F\/O)/);
+    // ⚠ 예전엔 여기서 .replace('훈련','')를 해서 "훈련부기장"이 "부기장"으로, "훈련기장"이 "기장"으로
+    //   깎여 나갔었음(같은 문서의 기량 체크는 Duty code(TF/TC)로 훈련기/부기장을 제대로 잡는데,
+    //   지식 체크만 Trainee Role 표기를 써서 값이 서로 달라지는 원인이었음) — 원문 값을 그대로 사용하도록 수정
+    if (roleM) rec.qual = roleM[1]==='CAP' ? '기장' : roleM[1]==='F/O' ? '부기장' : roleM[1];
     if (!rec.qual) { const dutyM = block.match(/Duty code\s+(\w+)/); if (dutyM) rec.qual = dutyCodeToQual(dutyM[1]); }
     if (!rec.qual && /<CAPT>/i.test(titleLine)) rec.qual='기장';
     if (!rec.qual && /<F\/O>/i.test(titleLine)) rec.qual='부기장';
@@ -4651,9 +5123,25 @@ function parseFlycoText(text, filename) {
       const nameM = block.match(/Name of Pilot\s+([^\n]+?)\s+(?:Flight No|$)/);
       if (nameM) rec.name = nameM[1].trim();
     }
+    if (!rec.name) {
+      // "(A330) LIP VALIDATION SHEET" 서식: "LIP NAME 임성수 EMP NO T130011" 형태
+      const lipNameM = block.match(/LIP NAME\s+([^\n]+?)\s+EMP NO\s+(\S+)/i);
+      if (lipNameM) { rec.name = lipNameM[1].trim(); rec.empid = lipNameM[2].trim(); }
+    }
 
     // 심사관
     // 심사관: 서명란에 "영문명 (사번)" 형태로 들어있음. 사번은 매칭 신뢰도가 가장 높으므로 반드시 보관.
+    // ⚠ CAT II/III·EDTO 등 특수심사 서식은 서명란 부근에 "FLIGHT CREW TRAINING TEAM" 같은 부서명/문서
+    //   상용구가 함께 있어, 사번 없는 폴백 패턴이 이를 심사관 이름으로 잘못 캡처하는 경우가 있었음.
+    //   (예: "FLIGHT CREW TRAINING TEAM, A" 오인식) — 상용구가 섞이면 버리고 검토 필요로 표시한다.
+    const EXAMINER_BLACKLIST = /FLIGHT\s*CREW|TRAINING\s*TEAM|OPERATIONS?\s*STANDARD|STANDARDS?\s*(TEAM|DEPT|DEPARTMENT)|DEPARTMENT|DIVISION|QUALITY\s*ASSURANCE|CHECK\s*-?\s*(LINE|KNOWLEDGE)|INSTRUCTOR\s*SIGNATURE|PILOT\s*SIGNATURE/i;
+    const isPlausibleExaminerName = s => {
+      if (!s) return false;
+      const t = s.trim();
+      if (!t || t.length > 30) return false;
+      if (EXAMINER_BLACKLIST.test(t)) return false;
+      return true;
+    };
     const examinerM = block.match(/INSTRUCTOR SIGNATURE[\s\S]{0,60}?\(T\d+\)\s+([A-Z][A-Z .]+?)\s*\((T\d+)\)/);
     if (examinerM) {
       rec.examiner = (examinerM[1]||'').trim();
@@ -4662,8 +5150,12 @@ function parseFlycoText(text, filename) {
       // CAE 심사관 등 외주 심사관은 Trinity 사번(T######)이 없어 위 패턴에 안 걸림 → ID 없이 이름만 캡처
       const examinerNoId = block.match(/INSTRUCTOR SIGNATURE[\s\S]{0,90}?([A-Z][A-Z .]{2,40}?)\s*(?:\n|\s{2,}|$)/);
       const officialM = block.match(/Checker'?s name\s+([^\n]+)/);
-      if (officialM) rec.examiner = (officialM[1]||'').trim();
-      else if (examinerNoId) rec.examiner = (examinerNoId[1]||'').trim();
+      // "(A330) LIP VALIDATION SHEET" 서식: "Instructor name 김동욱" (한글 이름, 사번 없음)
+      const instructorNameM = block.match(/Instructor name\s+([^\n]+?)\s*(?:\n|LIP SIGNATURE|$)/i);
+      if (officialM && isPlausibleExaminerName(officialM[1])) rec.examiner = officialM[1].trim();
+      else if (instructorNameM && isPlausibleExaminerName(instructorNameM[1])) rec.examiner = instructorNameM[1].trim();
+      else if (examinerNoId && isPlausibleExaminerName(examinerNoId[1])) rec.examiner = examinerNoId[1].trim();
+      else { rec.examinerFailed = true; rec.note = (rec.note?rec.note+' / ':'')+'⚠ 심사관 자동인식 실패 - PDF 확인 후 직접 입력 필요'; }
     }
 
     // 점수(총점)/결과 + 항목별 1~5점 분포 (Trinity 기량체크만 — 국토부 서식은 S/U라 해당 없음)
@@ -4675,6 +5167,20 @@ function parseFlycoText(text, filename) {
     } else if (isOfficial) {
       rec.result = /■\s*Satisfactory/.test(block) ? '합격' : (/■\s*Unsatisfactory/.test(block) ? '불합격' : '');
       rec.score = ''; // 국토부 서식은 1~5점 없음
+    } else if (isLip && /Overall grade/i.test(block)) {
+      // "(A330) LIP VALIDATION SHEET" 서식: 총점(AVERAGE) 없이 "Overall grade PASS/FAIL"과
+      // 항목별(TRY/GRADE) 1~5점 표만 있음 — LIP/SIP 서식과 필드 라벨이 달라 별도 처리
+      const resM = block.match(/Overall grade\s+(PASS|FAIL)/i);
+      rec.result = resM ? (resM[1].toUpperCase()==='PASS'?'합격':'불합격') : '';
+      rec.score = '';
+      const itemMatches = [...block.matchAll(/^\d+(?:\.\d+)*\s+(?:.*?\s)?(\d)\s+(N\/A|\d)\s*$/gm)];
+      const dist = {1:0,2:0,3:0,4:0,5:0};
+      let total = 0;
+      itemMatches.forEach(m=>{
+        const g = m[2];
+        if (g!=='N/A') { const gv=+g; if(gv>=1&&gv<=5){ dist[gv]++; total++; } }
+      });
+      if (total>0) { rec.itemDist = dist; rec.itemTotal = total; }
     } else {
       const avgM = block.match(/AVERAGE\s+(\d+(?:\.\d+)?)/);
       rec.score = avgM ? String(Math.round(parseFloat(avgM[1]))) : '';
@@ -4694,24 +5200,11 @@ function parseFlycoText(text, filename) {
     records.push(rec);
   });
 
-  // 지식(KNOWLEDGE) 체크의 CHECK-TYPE이 심사종류/세부구분의 권위 있는 출처.
-  // 같은 파일·같은 사번의 기량 레코드에는 항상 이 값을 덮어쓴다.
-  // (기량 문서는 CHECK-TYPE 필드가 없고, 제목은 템플릿 이름이라 신뢰할 수 없음)
-  records.forEach(r=>{
-    if (r.process==='기량') {
-      const sib = records.find(s=>s.process==='지식' && s.empid && s.empid===r.empid && s.type);
-      if (sib) { r.type=sib.type; r.subtype=sib.subtype; }
-    }
-  });
-  // 파싱 신뢰도 체크 — 핵심 필드가 비어있으면 "검토 필요" 표시
-  // 인정심사인데 세부구분(초기/승격/전환/재자격)을 못 정했으면 반드시 사람이 확인해야 함
-  records.forEach(r=>{
-    r.needsReview = !r.ac || !r.name || !r.date || !r.result
-      || (r.source==='Trinity' && r.process==='기량' && !r.score)
-      || (r.type==='인정' && !r.subtype);
-  });
-  // 심사결과분석은 기량(마뉴버 체크) 결과만 다루므로, 지식(KNOWLEDGE) 체크는 세션 정보 상속에만 쓰고 최종 목록에서는 제외
-  return records.filter(r=>r.process==='기량');
+  // ⚠ 지식(KNOWLEDGE)↔기량(LINE/FFS) 체크는 서로 다른 PDF 파일로 업로드되는 경우가 많아(예: AC
+  //   정기심사의 지식/LINE 체크가 각각 별도 파일), 같은 사번끼리 짝을 맞추는 작업은 이 파일 하나만으로는
+  //   할 수 없다. 그래서 여기서는 블록 단위 원본 레코드를 그대로 반환하고, 상속/병합/검토필요 판정은
+  //   업로드 배치 전체(allRawRecs)를 보는 processFlycoFiles에서 수행한다.
+  return records;
 }
 
 // PDF 서명란은 영문 로마자로만 나오는 경우가 많아, 운항승무원 현황(crewDB)·심사관 관리(examinerDB)와
@@ -4730,6 +5223,12 @@ function inferSubtypeFromCrew(crew) {
   return null;
 }
 
+// 심사관 자동인식(PDF)은 한글 이름일 때만 통과시킨다. examinerDB에 CAE 심사관의 영문 이름이
+// name 필드에 그대로 등록돼 있는 경우가 있어("KIM", "A PC" 등), 단순히 "examinerDB에 있는 이름인가"만
+// 보면 이런 값도 매칭된 것처럼 통과해버린다 — 한글 이름 여부까지 확인해야 확실히 걸러진다.
+function isKoreanExaminerName(s) {
+  return /^[가-힣]{2,}(?:\s[가-힣]{1,})*$/.test((s||'').trim());
+}
 function resolveFlycoIdentities(recs) {
   const crewByEmpid = {};
   (typeof crewDB!=='undefined'?crewDB:[]).forEach(c=>{ if(c.empid) crewByEmpid[c.empid.trim().toUpperCase()]=c; });
@@ -4749,6 +5248,9 @@ function resolveFlycoIdentities(recs) {
       // 사번 매칭 실패 + 이름이 영문(로마자)으로만 남아있으면, 화면에 조용히 노출되지 않도록 검토 필요로 표시
       if (r.name && /^[A-Z .]+$/.test(r.name.trim())) r.needsReview = true;
     }
+    // LIP임무수행능력검증은 서식상 "자격"에 해당하는 필드가 없어(운항승무원 현황의 기장/부기장 자격이
+    // 그대로 들어오면 오히려 혼동을 준다) — 수동입력 페이지(updateSubtypeOptions)와 동일하게 항상 '교관'으로 통일
+    if (r.type === 'LIP임무수행능력검증') r.qual = '교관';
     // 심사관 매칭 (신뢰도 순): ① PDF의 심사관 사번 → ② 등록된 영문명 → ③ 한글 이름 그대로 일치
     //   사번이 가장 확실하므로, CAE 심사관도 사번만 등록해두면 영문명 없이 자동 인식됨
     let examMatch = null;
@@ -4758,14 +5260,26 @@ function resolveFlycoIdentities(recs) {
     if (!examMatch) examMatch = examinerByEng[(r.examiner||'').toUpperCase().trim()] || null;
     if (!examMatch && r.examiner) examMatch = examinerDB.find(e=>e.name===r.examiner) || null;
 
-    if (examMatch) {
+    if (examMatch && isKoreanExaminerName(examMatch.name)) {
       r.examiner = examMatch.name;
       r.examinerEmpid = examMatch.empid || r.examinerEmpidPdf || '';
       r.examinerType = examMatch.type || '';
       r.matchedExaminer = true;
+      r.examinerReviewReason = '';
     } else {
       r.examinerEmpid = r.examinerEmpidPdf || '';
       r.matchedExaminer = false;
+      // 심사관 이름이 한글이 아니면(예: "A PC", "KIM" — examinerDB에 그 이름으로 등록돼 있더라도)
+      // 불일치로 취급해 자동반영을 막는다. 담당자가 심사관 관리에서 한글 이름으로 정리하거나,
+      // 검토 화면에서 직접 확인/수정해야 한다.
+      r.needsReview = true;
+      // 화면/툴팁에서 왜 걸렸는지 바로 알 수 있도록 사유를 구분해 남긴다
+      r.examinerReviewReason = examMatch
+        ? `⚠ "${r.examiner}"이(가) 심사관 관리에 한글 이름이 아닌 상태로 등록돼 있어요 - 심사관 관리에서 한글 이름으로 고쳐주세요`
+        : `⛔ "${r.examiner||'(비어있음)'}"은(는) 심사관 관리에 등록되지 않았어요 - 사번 또는 영문명을 등록하면 자동 인식돼요`;
+      if (!r.note || !r.note.includes('심사관')) {
+        r.note = (r.note ? r.note+' / ' : '') + r.examinerReviewReason;
+      }
     }
 
     // 세부구분(초기/승격/전환/재자격)이 비어있으면 심사계획 관리(DB)에서 보완.
@@ -4790,6 +5304,33 @@ function resolveFlycoIdentities(recs) {
     }
     // 그래도 못 정했으면 검토 필요로 표시
     if (r.type==='인정' && !r.subtype) r.needsReview = true;
+
+    // 심사종류-세부구분 조합이 SUBTYPE_MAP상 있을 수 없는 조합(예: 정기+CAT II/III)이면 바로잡는다.
+    // 위의 세부구분 추론(계획 매칭·운항승무원 현황 기준)이 끝난 뒤에 마지막으로 검사해야, 아직
+    // 추론 전이라 잠깐 비어있는 정상적인 상태를 "불일치"로 잘못 판정하지 않는다.
+    // 매 렌더마다 다시 검사하므로, 예전에 잘못 저장된 채로 남아있던 기록도 화면에 뜰 때 자동으로 정리된다.
+    if (r.type && typeof SUBTYPE_MAP!=='undefined' && SUBTYPE_MAP[r.type]) {
+      const cfg = SUBTYPE_MAP[r.type];
+      const valid = cfg.subs.length === 0 ? (!r.subtype || r.subtype === r.type) : cfg.subs.includes(r.subtype);
+      if (!valid) {
+        r.subtypeInvalid = true;
+        if (!r.note || !r.note.includes('세부구분 조합')) {
+          r.note = (r.note ? r.note+' / ' : '') + `⚠ 심사종류(${r.type})-세부구분 조합이 맞지 않아 세부구분을 비웠어요 - 직접 확인 필요`;
+        }
+        r.subtype = '';
+        r.needsReview = true;
+      }
+    }
+
+    // 심사종류(정기/인정/수시 등) 자체를 끝까지 인식 못한 경우 — 예전엔 조용히 빈 값으로 남아
+    // 화면엔 "—"로만 보이고 검토 필요 표시가 안 됐음. 매 렌더마다 다시 검사하므로, 이미 업로드된
+    // 옛 기록도 화면에 뜰 때 자동으로 잡힌다.
+    if (!r.type) {
+      r.needsReview = true;
+      if (!r.note || !r.note.includes('심사종류를 인식')) {
+        r.note = (r.note ? r.note+' / ' : '') + '⚠ 심사종류를 인식하지 못했어요 - 직접 확인 필요';
+      }
+    }
   });
 }
 
@@ -4799,7 +5340,7 @@ async function processFlycoFiles(fileList) {
   await ensurePDFJSLoaded();
   const st=$('flyco-upload-status');
   let added=0, failed=0;
-  const allNewRecs = [];
+  const allRawRecs = []; // 지식+기량 모두 포함(배치 전체에서 서로 짝을 맞추기 위해 필터링 전 상태로 모음)
   let flycoReplacedCount = 0, flycoDupSkipped = 0;
   for (const f of files) {
     try {
@@ -4812,10 +5353,49 @@ async function processFlycoFiles(fileList) {
         if (flycoDB[i].filename===f.name) { flycoDB.splice(i,1); flycoReplacedCount++; }
       }
       flycoFiles[f.name] = await fileToDataURL(f);
-      allNewRecs.push(...recs);
-      added += recs.length;
+      allRawRecs.push(...recs);
     } catch(e) { console.warn('PDF 파싱 실패', f.name, e); failed++; }
   }
+  // 지식(KNOWLEDGE) 체크의 CHECK-TYPE·심사일이 심사종류/세부구분/다일심사 여부의 권위 있는 출처.
+  // 같은 배치(한 번에 올린 파일들) 안에서 같은 사번의 기량 레코드에 종류·세부구분을 상속하고,
+  // 심사일이 기량 체크와 다르면(레이오버 등으로 여러 날 걸리는 정기심사) dateKnow(지식)/dateSkill(기량)로 병합한다.
+  // ⚠ 지식/기량이 서로 다른 PDF 파일로 업로드되는 경우가 많으므로 반드시 파일 하나가 아니라 배치 전체(allRawRecs)에서 찾는다.
+  allRawRecs.forEach(r=>{
+    if (r.process==='기량') {
+      const sib = allRawRecs.find(s=>s.process==='지식' && s.empid && s.empid===r.empid && s.type);
+      if (sib) {
+        r.type = sib.type; r.subtype = sib.subtype;
+        if (sib.date && sib.date !== r.date) { r.dateKnow = sib.date; r.dateSkill = r.date; }
+      }
+    }
+  });
+  // 파싱 신뢰도 체크 — 핵심 필드가 비어있으면 "검토 필요" 표시 (심사관 자동인식 실패도 포함)
+  // ⚠ 심사종류-세부구분 조합 검증(예: 정기+CAT II/III 같은 있을 수 없는 조합)은 세부구분 추론이
+  //   전부 끝난 뒤에 해야 하므로, 아래 resolveFlycoIdentities(allNewRecs) 안에서 마지막에 수행한다.
+  allRawRecs.forEach(r=>{
+    r.needsReview = !r.ac || !r.name || !r.date || !r.result || !!r.examinerFailed || !r.type
+      // LIP임무수행능력검증(LIP VALIDATION SHEET)은 총점(AVERAGE) 없이 PASS/FAIL만 있는 서식이라 점수 없음을 정상으로 취급
+      || (r.source==='Trinity' && r.process==='기량' && r.type!=='LIP임무수행능력검증' && !r.score)
+      || (r.type==='인정' && !r.subtype);
+    if (!r.type) r.note = (r.note ? r.note+' / ' : '') + '⚠ 심사종류를 인식하지 못했어요 - 직접 확인 필요';
+  });
+  // 심사결과분석은 기량(마뉴버 체크) 결과만 다루므로, 지식(KNOWLEDGE) 체크는 위 상속에만 쓰고 최종 목록에서는 제외
+  let allNewRecs = allRawRecs.filter(r=>r.process==='기량');
+  // ⚠ 이번에 올린 배치 안에서 같은 사람·같은 심사일·같은 기종/구분이 여러 번 나오면(예: PDF 블록이
+  //   페이지 구분자 오인식 등으로 중복 분리된 경우) 하나만 남긴다. 아래의 flycoDB 대조 중복제거는
+  //   "이미 저장된 기록"과만 비교하기 때문에, 이번 배치 내부에서 생긴 중복은 걸러내지 못해
+  //   그대로 다 반영되면서 같은 심사가 여러 건으로 자동 생성되는 원인이 됐었다(특히 수시심사).
+  {
+    const seen = new Map();
+    allNewRecs.forEach(r=>{
+      if (!r.empid || !r.date) return;
+      const key = [r.empid,r.date,r.ac,r.simline,r.type].join('|');
+      seen.set(key, r); // 같은 키면 나중 것으로 계속 덮어써서 마지막 1건만 남김
+    });
+    const keepIds = new Set([...seen.values()].map(r=>r.id));
+    allNewRecs = allNewRecs.filter(r=>(!r.empid || !r.date) || keepIds.has(r.id));
+  }
+  added = allNewRecs.length;
   // 파일명이 달라도 같은 사람·같은 심사일·같은 기종/구분이 이미 있으면 중복으로 보고 기존 걸 새 걸로 교체
   allNewRecs.forEach(nr=>{
     if (!nr.empid || !nr.date) return;
@@ -4835,6 +5415,7 @@ async function processFlycoFiles(fileList) {
     st.textContent = `✅ 파일 ${files.length}개 처리 · 심사기록 ${added}건 추출` + (failed?` · ⚠ ${failed}개 파일은 인식 실패(수동 확인 필요)`:'')
       + (unmatchedExaminers?` · 심사관 ${unmatchedExaminers}건은 영문명 매칭 실패(심사관 관리에서 영문명 등록하면 자동 매칭돼요)`:'')
       + (syncedCount?` · 🔄 심사결과 관리에 ${syncedCount}건 자동 반영됨`:'')
+      + (lastAutoPairedCount?` · ✈ SET 심사 ${lastAutoPairedCount}쌍 자동 결합됨`:'')
       + (flycoReplacedCount?` · 🔁 동일 파일 재업로드로 ${flycoReplacedCount}건 교체됨`:'')
       + (flycoDupSkipped?` · 중복 ${flycoDupSkipped}건 자동 정리됨`:'');
   }
@@ -4866,6 +5447,19 @@ function downloadFlycoFile(filename) {
   a.click();
 }
 
+// 심사종류(flyco-edit-type) 선택에 따라 세부구분(flyco-edit-subtype) 선택지를 SUBTYPE_MAP 기준으로
+// 제한한다 — 이게 없으면 "정기"를 골라도 "CAT II/III" 같은 있을 수 없는 세부구분을 그대로 저장할 수
+// 있었고, 실제로 이렇게 잘못 저장된 조합이 화면에 남아있었다.
+function updateFlycoEditSubtypeOptions() {
+  const type = $('flyco-edit-type')?.value || '';
+  const sel = $('flyco-edit-subtype');
+  if (!sel) return;
+  const cfg = (typeof SUBTYPE_MAP!=='undefined' && SUBTYPE_MAP[type]) || {subs:[]};
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">-</option>' + cfg.subs.map(s=>`<option value="${s}">${s}</option>`).join('');
+  sel.value = cfg.subs.includes(cur) ? cur : '';
+  sel.disabled = cfg.subs.length === 0; // 정기/수시/특별/사내/LIP는 세부구분이 없어 아예 선택 불가로 잠금
+}
 // ── 심사결과분석 수정 모달 (심사계획 관리와 동일한 패턴: 표는 컴팩트하게, 수정은 팝업으로) ──
 function openFlycoEditModal(id) {
   const r = flycoDB.find(r=>r.id===id); if(!r) return;
@@ -4873,6 +5467,8 @@ function openFlycoEditModal(id) {
   $('flyco-edit-ac').value = r.ac||'';
   $('flyco-edit-simline').value = r.simline||'LINE';
   $('flyco-edit-type').value = r.type||'';
+  updateFlycoEditSubtypeOptions();
+  if ($('flyco-edit-subtype')) $('flyco-edit-subtype').value = r.subtype||'';
   $('flyco-edit-qual').value = r.qual||'';
   $('flyco-edit-empid').value = r.empid||'';
   $('flyco-edit-name').value = r.name||'';
@@ -4880,6 +5476,8 @@ function openFlycoEditModal(id) {
   $('flyco-edit-score').value = r.score||'';
   $('flyco-edit-result').value = r.result||'';
   $('flyco-edit-examiner').value = r.examiner||'';
+  const dl = $('flyco-edit-examiner-list');
+  if (dl && typeof examinerDB!=='undefined') dl.innerHTML = examinerDB.map(e=>`<option value="${e.name}">`).join('');
   $('flyco-edit-modal').classList.add('open');
 }
 function closeFlycoEditModal() { $('flyco-edit-modal').classList.remove('open'); }
@@ -4887,9 +5485,18 @@ function saveFlycoEdit() {
   const id = $('flyco-edit-id').value;
   const r = flycoDB.find(r=>r.id===id); if(!r) return;
   const g=eid=>$(eid).value.trim();
+  const examinerVal = g('flyco-edit-examiner');
+  // 심사관 컬럼에는 심사관 관리에 등록된 이름만 저장 가능 (임의 텍스트 저장 방지)
+  if (examinerVal && typeof examinerDB!=='undefined' && !examinerDB.some(e=>e.name===examinerVal)) {
+    alert(`⛔ "${examinerVal}"은(는) 심사관 관리에 등록되지 않은 이름이에요.\n\n심사관 목록에서 선택하거나, 먼저 심사관 관리 페이지에서 등록해주세요.`);
+    return;
+  }
   r.ac=g('flyco-edit-ac'); r.simline=g('flyco-edit-simline'); r.type=g('flyco-edit-type');
+  r.subtype = $('flyco-edit-subtype') ? g('flyco-edit-subtype') : r.subtype;
   r.qual=g('flyco-edit-qual'); r.empid=g('flyco-edit-empid'); r.name=g('flyco-edit-name');
-  r.date=g('flyco-edit-date'); r.score=g('flyco-edit-score'); r.result=g('flyco-edit-result'); r.examiner=g('flyco-edit-examiner');
+  r.date=g('flyco-edit-date'); r.score=g('flyco-edit-score'); r.result=g('flyco-edit-result'); r.examiner=examinerVal;
+  // 담당자가 직접 확인해서 등록된 이름으로 저장한 것이므로 심사관 매칭 완료로 표시 (동기화 시 반영되도록)
+  r.matchedExaminer = !!examinerVal;
   r.needsReview = !r.ac || !r.name || !r.date || !r.result;
   closeFlycoEditModal();
   syncFlycoResultToPlan(r); // 담당자가 방금 확인/수정한 값이므로 바로 심사결과 관리에 반영
@@ -4898,20 +5505,34 @@ function saveFlycoEdit() {
 }
 // ══════════════════════════════════════════════════════════════════
 // 심사결과분석 → 심사결과 관리 자동 동기화
-//   심사기록부 PDF에서 추출된 결과(합격/불합격)를 심사계획 관리(DB)의
-//   같은 사람·같은 심사일(±3일)·같은 기종/SIM-LINE 행에 자동으로 채워넣는다.
-//   ⚠ 이미 결과가 입력돼 있는 행은 절대 덮어쓰지 않는다 (수동 입력이 항상 우선).
+//   심사기록부(PDF)에서 추출된 결과(합격/불합격)를 심사계획 관리(DB)에 반영한다.
+//   매칭 키: 날짜(±3일) + 피심사자(사번) + 심사관 + 심사종류
+//   우선순위: 심사기록부가 항상 우선 — 매칭된 행에 이미 다른 값이 있어도 심사기록부 값으로 덮어쓴다.
+//   매칭되는 행이 심사결과 관리에 없으면 신규로 생성한다.
 //   ⚠ 추출값에 오류 가능성이 있는(needsReview) 레코드는 자동 반영하지 않고,
 //     담당자가 수정 버튼으로 확인/저장한 뒤에만(saveFlycoEdit) 반영한다.
 // ══════════════════════════════════════════════════════════════════
 function findMatchingPlanRow(fr) {
+  // 이미 한 번 매칭/생성된 적이 있으면 그 행을 그대로 재사용한다.
+  // (심사관 관리 갱신 등으로 fr.examiner 값이 나중에 달라져도, 매번 이름으로 다시 찾다가
+  //  매칭에 실패해 같은 심사가 중복으로 새로 생성되는 걸 막기 위한 안전장치)
+  if (fr.planRowId) {
+    const pinned = DB.find(d=>d.id===fr.planRowId);
+    if (pinned) return pinned;
+  }
   if (!fr.empid || !fr.date) return null;
-  const candidates = DB.filter(d=>{
+  const strict = DB.filter(d=>{
     if (!d.empid || d.empid!==fr.empid) return false;
-    if (fr.ac && d.ac && d.ac!==fr.ac) return false;
-    if (fr.simline && d.simline && d.simline!==fr.simline) return false;
+    if (fr.type && d.type && d.type!==fr.type) return false;
+    if (fr.examiner && d.examiner && d.examiner!=='—' && d.examiner!==fr.examiner) return false;
     return true;
   });
+  // 심사관까지 일치하는 후보가 없으면, 심사관 표기 차이(오인식·재매칭 등)로 놓쳤을 가능성을 고려해
+  // 사람+심사종류(+날짜 근접)만으로 한 번 더 찾아본다 — 이게 없으면 심사관 텍스트가 조금만 달라져도
+  // 같은 심사가 계속 새로 생성돼(특히 수시심사처럼 세부구분이 없는 경우) 중복이 쌓이는 문제가 있었다.
+  const candidates = strict.length ? strict : DB.filter(d=>
+    d.empid===fr.empid && (!fr.type || !d.type || d.type===fr.type)
+  );
   if (!candidates.length) return null;
   const exact = candidates.find(d=>d.date===fr.date);
   if (exact) return exact;
@@ -4924,29 +5545,88 @@ function findMatchingPlanRow(fr) {
   });
   return best;
 }
+// 매칭되는 심사계획 행이 없을 때 심사기록부 데이터로 신규 행을 만든다
+function createPlanRowFromFlyco(fr) {
+  const isMulti = fr.dateKnow && fr.dateSkill && fr.dateKnow !== fr.dateSkill;
+  const row = {
+    id: nextId++, simline: fr.simline||'LINE', type: fr.type||'', subtype: fr.subtype||'',
+    process: fr.process||'기량', ac: fr.ac||'', qual: fr.qual||'',
+    empid: fr.empid||'', name: fr.name||'', date: fr.date,
+    dateKnow: isMulti?fr.dateKnow:'', dateSkill: isMulti?fr.dateSkill:'',
+    flight:'—', examiner: fr.examiner||'—', place:'—', note:'', setId:null, result:''
+  };
+  DB.push(row);
+  return row;
+}
 function syncFlycoResultToPlan(fr) {
   if (!fr.result) return false;
-  const row = findMatchingPlanRow(fr);
-  if (!row) { fr.planMatched=false; return false; }
+  let row = findMatchingPlanRow(fr);
+  let created = false;
+  if (!row) { row = createPlanRowFromFlyco(fr); created = true; }
   fr.planMatched = true;
   fr.planRowId = row.id;
-  if (row.result) {
-    fr.resultConflict = row.result !== fr.result; // 이미 입력된 결과와 다르면 표시만 (덮어쓰지 않음)
-    return false;
-  }
-  fr.resultConflict = false;
+  fr.resultConflict = false; // 심사기록부가 항상 우선이므로 충돌 표시 없이 덮어씀
+  // 심사기록부가 항상 우선이므로 결과뿐 아니라 심사관·심사종류·세부구분·기종·자격도 함께 맞춘다.
+  // (심사결과분석에서 심사관을 바로잡아도 심사계획/결과 관리에는 반영이 안 되던 문제 수정 —
+  //  단, 한글 이름으로 확인된(matchedExaminer) 심사관일 때만 덮어써서 검증 안 된 값이 넘어가지 않게 한다)
+  const snapshot = JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual]);
   row.result = fr.result;
+  if (fr.matchedExaminer && fr.examiner && fr.examiner!=='—') row.examiner = fr.examiner;
+  // 세부구분은 종류와 세트로 함께 맞춘다(비어있어도 덮어씀) — 그래야 심사기록부 쪽에서 잘못된
+  // 종류-세부구분 조합이 바로잡혀 비워졌을 때, 이미 반영돼 있던 계획/결과 행의 낡은 세부구분도
+  // 같이 지워진다. (예전엔 세부구분이 비어있으면 덮어쓰지 않아 잘못된 값이 그대로 남아있었음)
+  if (fr.type) { row.type = fr.type; row.subtype = fr.subtype || ''; }
+  if (fr.ac) row.ac = fr.ac;
+  if (fr.qual) row.qual = fr.qual;
+  const changed = created || snapshot !== JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual]);
+  if (!changed) return false;
   row.resultSource = 'flyco';
   row.resultSourceFile = fr.filename || '';
   return true;
 }
+// 심사기록부(PDF)로 반영/갱신된 심사 행들 중, 같은 날짜·SIM/LINE·심사종류·세부구분·편명/구간·
+// 심사관·심사장소를 가진 서로 다른 두 사람의 개별(setId 없는) 행을 찾아 SET 심사로 자동 결합한다.
+// (한 세션에 두 사람이 함께 심사받으면 이 조건이 전부 같으므로, 같으면 같은 세션=SET으로 본다)
+let lastAutoPairedCount = 0;
+function autoPairSetRows(candidateIds) {
+  if (!candidateIds || !candidateIds.size) return 0;
+  const rows = DB.filter(d => !d.setId && candidateIds.has(d.id));
+  const claimed = new Set();
+  let pairedCount = 0;
+  rows.forEach(r=>{
+    if (claimed.has(r.id)) return;
+    const partner = DB.find(d=>
+      !d.setId && d.id!==r.id && !claimed.has(d.id) &&
+      d.date===r.date && d.simline===r.simline && d.type===r.type && (d.subtype||'')===(r.subtype||'') &&
+      (d.flight||'—')===(r.flight||'—') && d.examiner===r.examiner && (d.place||'—')===(r.place||'—') &&
+      d.empid && r.empid && d.empid!==r.empid
+    );
+    if (partner) {
+      const setId = 'S'+Math.min(r.id, partner.id);
+      r.setId=setId; r.setSeq=1;
+      partner.setId=setId; partner.setSeq=2;
+      claimed.add(r.id); claimed.add(partner.id);
+      pairedCount++;
+    }
+  });
+  return pairedCount;
+}
 function syncAllFlycoResultsToPlan() {
   let changed = 0;
-  flycoDB.forEach(fr=>{ if(!fr.needsReview && syncFlycoResultToPlan(fr)) changed++; });
-  if (changed>0) {
+  const touchedIds = new Set();
+  flycoDB.forEach(fr=>{
+    if (fr.needsReview) return;
+    const didChange = syncFlycoResultToPlan(fr);
+    if (fr.planRowId) touchedIds.add(fr.planRowId);
+    if (didChange) changed++;
+  });
+  const paired = autoPairSetRows(touchedIds);
+  lastAutoPairedCount = paired;
+  if (changed>0 || paired>0) {
     if (typeof computeQualmFromDB==='function') computeQualmFromDB();
     if (typeof updateSidebarBadges==='function') updateSidebarBadges();
     if (typeof saveToStorage==='function') saveToStorage();
+    if ($('page-plan')?.classList.contains('active') && typeof renderPlan==='function') renderPlan();
     if ($('page-result')?.classList.contains('active') && typeof renderResult==='function') renderResult();
     if ($('page-qualm')?.classList.contains('active') && typeof renderQualm==='function') renderQualm();
   }
@@ -4980,25 +5660,45 @@ function renderFlyco() {
   $('flyco-val-fail').textContent = inPeriod.filter(r=>r.result==='불합격').length;
   $('flyco-val-review').textContent = inPeriod.filter(r=>r.needsReview).length;
 
+  // 표 위 인원 요약 — 현재 필터(기종/SIM·LINE/심사종류/자격/결과)가 적용된 rows 기준으로 집계.
+  //   기장/부기장은 훈련기장/훈련부기장을 각각 같은 트랙으로 묶어서 센다(피심사자 자격 기준).
+  //   위촉심사관은 자격 값이 아니라 "이 심사를 진행한 심사관이 사내 위촉심사관인 행" 수를 별도로 센다.
+  const qsCapt = rows.filter(r=>r.qual==='기장'||r.qual==='훈련기장').length;
+  const qsFo = rows.filter(r=>r.qual==='부기장'||r.qual==='훈련부기장').length;
+  const qsInstructor = rows.filter(r=>r.qual==='교관').length;
+  const qsDesignated = rows.filter(r=>r.examinerType==='사내 위촉심사관').length;
+  const qsOther = rows.length - qsCapt - qsFo - qsInstructor;
+  const qsEl = $('flyco-qual-summary');
+  if (qsEl) {
+    qsEl.innerHTML = `기장 ${qsCapt}명 · 부기장 ${qsFo}명 · 위촉심사관 ${qsDesignated}명 · 교관 ${qsInstructor}명`
+      + (qsOther>0 ? ` · 자격 미확인 ${qsOther}명` : '')
+      + ` · <span style="color:var(--line)">총 ${rows.length}명</span>`;
+  }
+
   $('flyco-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="11" class="empty-state">업로드된 심사기록이 없습니다. 위에서 PDF를 올려주세요.</td></tr>`
+    ? `<tr><td colspan="12" class="empty-state">업로드된 심사기록이 없습니다. 위에서 PDF를 올려주세요.</td></tr>`
     : rows.map(r=>{
         const resCls = r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
         const rowStyle = r.needsReview ? 'background:#FEF8EC' : '';
         const scoreDisp = r.score
           ? `<b>${r.score}${r.source==='Trinity'?'점':''}</b>` + (r.itemDist ? `<div style="font-size:9px;color:var(--muted);white-space:nowrap">1점${r.itemDist[1]}·2점${r.itemDist[2]}·3점${r.itemDist[3]}·4점${r.itemDist[4]}·5점${r.itemDist[5]} (${r.itemTotal}개항목)</div>` : '')
           : '—';
-        return `<tr style="${rowStyle}" title="${r.needsReview?'일부 항목이 비어있어요 — 수정 버튼으로 확인해주세요':''}">
+        const reviewTip = r.needsReview ? (r.note ? r.note.replace(/"/g,'&quot;') : '일부 항목이 비어있어요 — 수정 버튼으로 확인해주세요') : '';
+        return `<tr style="${rowStyle}" title="${reviewTip}">
         <td>${r.ac?acDot(r.ac):'—'}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td>${r.type||'—'}</td>
+        <td>${r.type || '<span class="badge-tag tag-fail" style="font-size:9px;padding:1px 5px" title="PDF에서 심사종류를 인식하지 못했어요 - 수정 버튼으로 직접 선택해주세요">⛔ 미인식</span>'}</td>
+        <td>${r.subtype?`<span style="font-size:11px">${r.subtype}</span>`:'—'}</td>
         <td>${r.qual||'—'}</td>
         <td>${r.empid||'—'}</td>
         <td style="font-weight:600">${r.name||'—'}${r.matchedCrew?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="운항승무원 현황에서 사번으로 확인됨 (이름·자격 자동 교정)"></i>':' <i class="ti ti-help-circle" style="color:var(--hint);font-size:11px" title="운항승무원 현황에 없는 사번 — PDF 값 그대로 사용 중"></i>'}</td>
         <td>${r.date||'—'}</td>
         <td style="line-height:1.3">${scoreDisp}</td>
         <td class="center"><span class="badge-tag ${resCls}">${r.result||'—'}</span></td>
-        <td>${r.examiner||'—'}${r.matchedExaminer?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="심사관 관리에서 확인됨 (사번 또는 영문명 매칭)"></i>':' <i class="ti ti-help-circle" style="color:var(--hint);font-size:11px" title="심사관 관리에 없음 — 사번/영문명을 등록하면 자동 인식돼요"></i>'}</td>
+        <td>${r.examiner||'—'}${r.matchedExaminer
+          ? ' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="심사관 관리에서 확인됨 (사번 또는 영문명 매칭)"></i>'
+          : ` <span class="badge-tag tag-fail" style="font-size:9px;padding:1px 5px;white-space:nowrap" title="${(r.examinerReviewReason||'심사관 관리에 없음').replace(/"/g,'&quot;')}">⛔ 미등록</span>`
+        }</td>
         <td class="center" style="white-space:nowrap">
           <button class="btn btn-sm" style="background:#F0EDF8;color:#5A4080;border:1px solid #D8CEEC;padding:2px 6px" title="원본 PDF 다운로드" onclick="downloadFlycoFile('${r.filename.replace(/'/g,"\\'")}')"><i class="ti ti-download" style="font-size:12px"></i></button>
           <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 6px" title="수정" onclick="openFlycoEditModal('${r.id}')"><i class="ti ti-edit" style="font-size:12px"></i></button>
@@ -6054,9 +6754,11 @@ renderPlan = function() {
     qualSel.dataset.filled='1';
   }
 
+  // LIP임무수행능력검증은 정기심사의 한 종류로 취급 — "정기"로 필터링하면 LIP도 함께 나오게 한다.
+  const typeMatch = r => type==='전체' || r.type===type || (type==='정기' && r.type==='LIP임무수행능력검증');
   let rows = DB.filter(r=>
     (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) &&
-    (type==='전체'||r.type===type) && (qual==='전체'||r.qual===qual) &&
+    typeMatch(r) && (qual==='전체'||r.qual===qual) &&
     (!kwEmpid||(r.empid||'').toLowerCase().includes(kwEmpid)) &&
     (!kwName||(r.name||'').toLowerCase().includes(kwName)) &&
     (!kwExaminer||(r.examiner||'').toLowerCase().includes(kwExaminer)) &&
@@ -6100,8 +6802,9 @@ renderPlan = function() {
         <td>${r.subtype}</td>
         <td style="font-size:10px;line-height:1.4">${processDisp}</td>
         <td>${acDot(r.ac)}</td><td>${r.qual}</td>
-        <td>${r.empid}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight}</td>
-        <td>${r.examiner}</td><td>${r.place}</td><td>${r.note||'—'}</td>
+        <td>${r.empid}</td><td>${r.name}</td><td>${planDateDisp(r)}</td><td>${r.flight}</td>
+        <td>${r.examiner}</td><td>${r.place}</td>
+        <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.note||'').replace(/"/g,'&quot;')}">${r.note||'—'}</td>
         <td class="center">
           <button class="btn btn-sm" style="background:#EEF2F8;color:var(--line);border:1px solid #C8D5E4;padding:2px 8px"
             onclick="editPlanRow(${r.id})"><i class="ti ti-edit" style="font-size:12px"></i></button>
@@ -6139,6 +6842,49 @@ function deleteSelectedPlanRows() {
   renderPlan(); renderQualm(); renderCal(); renderResult();
   updateSidebarBadges();
   saveToStorage();
+}
+// 같은 사람(사번 우선)·날짜·심사종류·세부구분·SIM/LINE으로 겹치는 중복 행을 정리한다.
+// (심사결과분석 자동반영이 심사관 표기 변동 등으로 같은 물리적 심사를 여러 번 신규 생성했을 때 복구용)
+// 심사관은 키에서 제외한다 — 중복행마다 심사관 표기가 달라져 있을 수 있어, 그걸 기준으로 삼으면 오히려 못 묶는다.
+function dedupePlanRows() {
+  const groups = {};
+  DB.forEach(d=>{
+    const key = [d.empid||('name:'+d.name), d.date, d.type, d.subtype||'', d.simline].join('|');
+    (groups[key] = groups[key]||[]).push(d);
+  });
+  const toRemoveIds = new Set();
+  Object.values(groups).forEach(list=>{
+    if (list.length<2) return;
+    // 결과가 있는 행을 우선 보존, 그다음 최근에 생성된(=id가 큰) 행을 보존
+    list.sort((a,b)=>{
+      const aHas = a.result?1:0, bHas = b.result?1:0;
+      if (aHas!==bHas) return bHas-aHas;
+      return (b.id||0)-(a.id||0);
+    });
+    for (let i=1;i<list.length;i++) toRemoveIds.add(list[i].id);
+  });
+  if (!toRemoveIds.size) { alert('중복된 심사 일정이 없어요.'); return; }
+  if (!confirm(`중복된 심사 일정 ${toRemoveIds.size}건을 정리할까요?\n(같은 사람·날짜·심사종류·세부구분 기준, 결과가 있는 쪽을 우선 남겨요)`)) return;
+  for (let i=DB.length-1;i>=0;i--){ if (toRemoveIds.has(DB[i].id)) DB.splice(i,1); }
+  if (typeof computeQualmFromDB==='function') computeQualmFromDB();
+  renderPlan(); renderQualm(); renderCal(); renderResult();
+  updateSidebarBadges();
+  saveToStorage();
+  alert(`중복 ${toRemoveIds.size}건을 정리했어요.`);
+}
+
+// 이미 등록된 심사계획 전체를 대상으로 SET 자동결합(autoPairSetRows)을 수동으로 실행한다.
+// (심사기록부 반영 시엔 자동으로 실행되지만, 이 기능이 생기기 전에 이미 개별로 반영돼 있던
+//  건들은 소급 적용되지 않으므로, 이 버튼으로 기존 데이터도 한 번에 정리할 수 있게 함)
+function autoPairSetRowsAll() {
+  const allIds = new Set(DB.map(d=>d.id));
+  const paired = autoPairSetRows(allIds);
+  if (!paired) { alert('SET으로 묶을 수 있는 개별 심사가 없어요.\n(같은 날짜·편명/구간·심사관·심사장소·심사종류를 가진 서로 다른 두 사람의 개별 심사가 있어야 해요)'); return; }
+  if (typeof computeQualmFromDB==='function') computeQualmFromDB();
+  renderPlan(); renderQualm(); renderCal(); renderResult();
+  updateSidebarBadges();
+  saveToStorage();
+  alert(`✈ SET 심사 ${paired}쌍을 자동으로 결합했어요.`);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -6194,7 +6940,7 @@ renderCal = function() {
   const events=DB.filter(r=>
     (ac==='전체'||r.ac===ac) &&
     (sl==='전체'||r.simline===sl) &&
-    r.date.startsWith(ym) &&
+    (r.date.startsWith(ym) || (r.dateKnow && r.dateKnow.startsWith(ym))) &&
     (!kw|| [r.name,r.empid,r.examiner,r.flight,r.place,r.qual,r.type,r.subtype]
       .some(v=>(v||'').toString().toLowerCase().includes(kw))
     )
@@ -6237,30 +6983,48 @@ renderCal = function() {
     const d=other?null:cnt;
     const dateStr=d?`${calYear}-${String(calMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`:'';
     const isToday=dateStr===todayStr;
-    const dayEvs=d?events.filter(e=>parseInt(e.date.split('-')[2])===d):[];
+    // ⚠ 여러 날 걸리는 심사(dateEnd)는 시작일(date)에만 카드를 1개 띄운다 — 예전엔 date~dateEnd 구간
+    //   전체에 걸쳐 매일 카드를 반복해서(예: 4일짜리 심사면 4칸에 4개) 같은 심사가 중복 등록된 것처럼
+    //   보이는 문제가 있었음.
+    //   지식/기량 날짜가 다른 경우(dateKnow)는 성격이 달라 — 실제로 서로 다른 날 진행되는 별개
+    //   세션이므로 각 날짜에 별도 카드를 그대로 유지한다.
+    const dayEvs=d?events.filter(e=>e.date===dateStr || (e.dateKnow && e.dateKnow===dateStr)):[];
     const groups=groupDay(dayEvs);
 
     const evHtml=groups.map(g=>{
       const e=g.base;
       const n=g.persons.length;
       const cls=calEvClass(e.type);
-      const typeLabel=e.simline==='SIM'?`SIM · ${e.type||''}`:e.type;
+      const typeLabel=e.simline==='SIM'?`SIM · ${e.type||''}`:`LINE · ${e.type||''}`;
       const examShort=e.examiner&&e.examiner!=='—'?e.examiner.split(' ')[0]:'';
-      const flight=e.simline==='LINE'&&e.flight&&e.flight!=='—'?e.flight:'';
+      // SIM 세션(S1/K1 등)도 편명/구간 칸에 라벨이 들어오므로 LINE 제한 없이 표시
+      const flight=e.flight&&e.flight!=='—'?e.flight:'';
       // 세부구분: 괄호 내 과정 대신 procs set으로 표시
       const subBase=e.subtype?e.subtype.split('(')[0].trim():'';
       const procArr=[...g.procs];
       const procStr=procArr.length>1?'지식&기량':procArr.length===1?procArr[0]:'';
       const subtypeDisp=subBase&&subBase!=='기타'?subBase:procStr||'';
-      // 피심사자 모두 표시: "박세종 C 정승섭 F"
+      // 피심사자 모두 표시: "박세종 C 정승섭 F" + SIM지원(동승, 심사대상 아님)은 괄호로 덧붙임
+      const supportSet=new Set();
+      g.persons.forEach(p=>{ (p.simSupport||[]).forEach(nm=>supportSet.add(nm)); });
+      const supportStr=supportSet.size?` (${[...supportSet].join(', ')})`:'';
       const personsStr=g.persons.map(p=>{
         const q=p.qual==='기장'?'C':p.qual==='부기장'?'F':p.qual?p.qual.substring(0,2):'';
         return`${p.name}${q?' '+q:''}`;
-      }).join(' · ');
+      }).join(' · ') + supportStr;
       const ids=g.persons.map(p=>p.id).join(',');
+      // 지식심사일과 기량심사일이 다르면(레이오버 등) 이 카드가 그 중 어느 날짜에 뜬 건지 맨 위에 강조
+      // 표시만 하고, 날짜 자체는 어차피 이 카드가 놓인 달력 칸으로 알 수 있으므로 따로 반복하지 않는다.
+      const isKS = e.dateKnow && e.dateSkill && e.dateKnow !== e.dateSkill;
+      const ksRole = isKS ? (dateStr===e.dateKnow?'지식':dateStr===e.dateSkill?'기량':'') : '';
+      const ksPrefix = ksRole ? `<span style="color:#5A4080;opacity:1;font-weight:900">[${ksRole}]</span> ` : '';
+      // 여러 날 걸리는 심사(dateEnd)는 카드가 시작일에만 뜨므로, 기간을 "YYYY-MM-DD ~ YYYY-MM-DD"로 표시
+      const isMulti = e.dateEnd && e.dateEnd !== e.date;
+      const rangeMeta = isMulti ? `<div class="cal-ev-meta">${e.date} ~ ${e.dateEnd}</div>` : '';
       return `<div class="cal-event cal-ev-${cls}" onclick="showCalGroupPopup(event,[${ids}])">
-        <div class="cal-ev-type">${typeLabel}${subtypeDisp?` · ${subtypeDisp}`:''}</div>
+        <div class="cal-ev-type">${ksPrefix}${typeLabel}${subtypeDisp?` · ${subtypeDisp}`:''}</div>
         <div class="cal-ev-name" style="white-space:normal;line-height:1.3">${personsStr}</div>
+        ${rangeMeta}
         ${flight?`<div class="cal-ev-meta">✈ ${flight}</div>`:''}
         ${examShort?`<div class="cal-ev-examiner">👤 ${examShort}</div>`:''}
       </div>`;
@@ -6499,7 +7263,7 @@ renderRecord = function() {
         <td>${r.subtype||'—'}</td>
         <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
         <td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
-        <td>${r.empid||'—'}</td><td>${r.name}</td><td>${r.date}</td><td>${r.flight||'—'}</td>
+        <td>${r.empid||'—'}</td><td>${r.name}</td><td>${planDateDisp(r)}</td><td>${r.flight||'—'}</td>
         <td>${r.examiner||'—'}</td><td>${r.place||'—'}</td>
         <td class="center"><span class="badge-tag ${resCls}">${resLabel}</span></td>
         <td>${r.note||'—'}</td>
