@@ -5741,6 +5741,29 @@ function computeFlycoSubtypeTable(simline) {
     .forEach(r=>{ const s=Math.min(5,Math.max(1,parseInt(r.score))); table[r.subtype][s-1]++; });
   return table;
 }
+
+// ── "심사결과분석 다운로드" 전용 집계 — 총점이 아니라 "그 점수를 받은 항목이 하나라도 있으면 그 사람을 그 점수 칸에 1명 카운트".
+// 예: 총점 4점인 사람이 항목점수로 3점 2개·4점 42개를 받았다면 → 3점 칸에도 +1, 4점 칸에도 +1 (한 사람이 여러 칸에 중복 집계될 수 있음)
+function computeFlycoScoreTableByItemPresence(simline) {
+  const types=['인정','정기','수시'], quals=['기장','부기장'];
+  const table = {};
+  types.forEach(t=>{ table[t]={}; quals.forEach(q=>{ table[t][q]=[0,0,0,0,0]; }); });
+  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.itemDist&&types.includes(r.type)&&quals.includes(r.qual))
+    .forEach(r=>{
+      for (let s=1; s<=5; s++) { if ((r.itemDist[s]||0) > 0) table[r.type][r.qual][s-1]++; }
+    });
+  return table;
+}
+// 인정심사 세부구분별 버전 (위와 동일한 "항목 존재 여부" 기준)
+function computeFlycoSubtypeTableByItemPresence(simline) {
+  const subtypes=['최초_초기','승격','전환','재자격'];
+  const table = {}; subtypes.forEach(s=>{ table[s]=[0,0,0,0,0]; });
+  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type==='인정'&&r.itemDist&&subtypes.includes(r.subtype))
+    .forEach(r=>{
+      for (let s=1; s<=5; s++) { if ((r.itemDist[s]||0) > 0) table[r.subtype][s-1]++; }
+    });
+  return table;
+}
 // ── 막대 더블클릭 히트테스트 (화면 확대 zoom 때문에 Chart.js 기본 히트테스트가 좌표를 잘못 잡음) ──
 function bindFlycoChartDblclick(chartId, onHit) {
   const canvas = $(chartId);
@@ -6067,7 +6090,7 @@ async function exportFlycoAnalysis() {
     aoa.push(['','','횟수','비율','횟수','비율','횟수','비율','횟수','비율','횟수','비율','횟수','비율']);
     const pct=(v,sum)=>sum?Math.round(v/sum*100)+'%':0;
     if (byQual) {
-      const t = computeFlycoScoreTable(simline);
+      const t = computeFlycoScoreTableByItemPresence(simline);
       ['인정','정기','수시'].forEach(type=>{
         const sub=[0,0,0,0,0];
         ['기장','부기장'].forEach(q=>{
@@ -6083,7 +6106,7 @@ async function exportFlycoAnalysis() {
       const totalSum=total.reduce((a,b)=>a+b,0);
       aoa.push(['총계','',total[0],pct(total[0],totalSum),total[1],pct(total[1],totalSum),total[2],pct(total[2],totalSum),total[3],pct(total[3],totalSum),total[4],pct(total[4],totalSum),totalSum,totalSum?'100%':0]);
     } else {
-      const t = computeFlycoSubtypeTable(simline);
+      const t = computeFlycoSubtypeTableByItemPresence(simline);
       const labelMap={'최초_초기':'초기','승격':'승격','전환':'전환','재자격':'재자격'};
       const sub=[0,0,0,0,0];
       Object.entries(t).forEach(([st,arr])=>{
