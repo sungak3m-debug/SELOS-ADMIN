@@ -653,7 +653,7 @@ select{font-family:inherit}
           </div>
           <div class="filter-item">
             <div class="search-input"><i class="ti ti-search"></i>
-              <input id="qualm-search" placeholder="이름 또는 사번 검색" oninput="renderQualm()" onkeyup="renderQualm()">
+              <input id="qualm-search" placeholder="이름 또는 사번 검색 (입력 시 월과 무관하게 전체 적격월 표시)" oninput="renderQualm()" onkeyup="renderQualm()">
             </div>
           </div>
           <div class="filter-divider"></div>
@@ -5711,11 +5711,26 @@ function renderFlyco() {
   if ($('flyco-fail-card').style.display!=='none') renderFlycoFailList();
 }
 
+// 상단 필터바(기종/SIM·LINE/심사종류/자격)를 차트·드릴다운 집계에도 반영하기 위한 공통 체크.
+// '결과(합격/불합격)' 필터는 점수 분포 성격상 제외 — 검토 목록 표에서만 적용됨.
+// SIM/LINE 필터가 이 차트의 구분과 다르면 null을 반환해 아예 집계하지 않음(빈 차트).
+function flycoChartFilter(simline) {
+  const slF = $('flyco-simline')?.value||'전체';
+  if (slF!=='전체' && slF!==simline) return null;
+  return {
+    acF: $('flyco-ac')?.value||'전체',
+    typeF: $('flyco-type')?.value||'전체',
+    qualF: $('flyco-qual')?.value||'전체'
+  };
+}
 function computeFlycoScoreTable(simline) {
   const types=['인정','정기','수시'], quals=['기장','부기장'];
   const table = {};
   types.forEach(t=>{ table[t]={}; quals.forEach(q=>{ table[t][q]=[0,0,0,0,0]; }); });
-  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.score&&types.includes(r.type)&&quals.includes(r.qual))
+  const f = flycoChartFilter(simline);
+  if (!f) return table;
+  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.score&&types.includes(r.type)&&quals.includes(r.qual)
+      && (f.acF==='전체'||r.ac===f.acF) && (f.typeF==='전체'||r.type===f.typeF) && (f.qualF==='전체'||r.qual===f.qualF))
     .forEach(r=>{
       const s = Math.min(5,Math.max(1,parseInt(r.score)));
       table[r.type][r.qual][s-1]++;
@@ -5727,7 +5742,10 @@ function computeFlycoItemTable(simline) {
   const types=['인정','정기','수시'];
   const table = {};
   types.forEach(t=>{ table[t]=[0,0,0,0,0]; });
-  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.itemDist&&types.includes(r.type))
+  const f = flycoChartFilter(simline);
+  if (!f) return table;
+  flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.itemDist&&types.includes(r.type)
+      && (f.acF==='전체'||r.ac===f.acF) && (f.typeF==='전체'||r.type===f.typeF) && (f.qualF==='전체'||r.qual===f.qualF))
     .forEach(r=>{
       for (let s=1; s<=5; s++) table[r.type][s-1] += (r.itemDist[s]||0);
     });
@@ -5913,7 +5931,9 @@ function subtypeSummaryHtml(list) {
 
 // 총점 드릴다운: 그 점수를 총점으로 받은 사람 명단
 function showFlycoDrilldown(simline, type, score) {
-  const list = flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.score&&parseInt(r.score)===score);
+  const f = flycoChartFilter(simline) || {acF:'전체',typeF:'전체',qualF:'전체'};
+  const list = flycoRowsInPeriod().filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.score&&parseInt(r.score)===score
+    && (f.acF==='전체'||r.ac===f.acF) && (f.qualF==='전체'||r.qual===f.qualF));
   const isInjung = type==='인정';
   const title = `${simline} · ${type} · 총점 ${score}점 (${list.length}명)`;
   $('flyco-drill-title').textContent = title;
@@ -5941,8 +5961,10 @@ function showFlycoDrilldown(simline, type, score) {
 
 // 항목별 드릴다운: 그 점수를 받은 항목이 있는 사람과, 그 사람이 그 점수를 몇 개 받았는지
 function showFlycoItemDrilldown(simline, type, score) {
+  const f = flycoChartFilter(simline) || {acF:'전체',typeF:'전체',qualF:'전체'};
   const list = flycoRowsInPeriod()
-    .filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.itemDist&&(r.itemDist[score]||0)>0)
+    .filter(r=>r.source==='Trinity'&&r.simline===simline&&r.type===type&&r.itemDist&&(r.itemDist[score]||0)>0
+      && (f.acF==='전체'||r.ac===f.acF) && (f.qualF==='전체'||r.qual===f.qualF))
     .map(r=>({...r, hitCount: r.itemDist[score]}))
     .sort((a,b)=>b.hitCount-a.hitCount);
   const isInjung = type==='인정';
@@ -6667,12 +6689,23 @@ renderQualm = function() {
   const ac     = $('qualm-ac')?.value||'전체';
   const role   = $('qualm-role')?.value||'전체';
   const status = $('qualm-status')?.value||'전체';
+  const kw = ($('qualm-search')?.value||'').trim().toLowerCase();
+
+  // 검색어가 있으면, 가장 먼저 매칭되는 사람의 적격월로 큰 달력 네비게이션을 자동 이동
+  // (검색을 지웠을 때 그 사람의 적격월에 그대로 머물러 있도록 하기 위함)
+  if (kw) {
+    const firstMatch = qualmDB.find(r=>(r.name||'').toLowerCase().includes(kw)||(r.empid||'').toLowerCase().includes(kw));
+    if (firstMatch?.qualmYm) {
+      const [yStr, mStr] = firstMatch.qualmYm.split('-');
+      const y = parseInt(yStr), m = parseInt(mStr);
+      if (y && m) { qualmSearchYear = y; qualmSearchMonth = m; }
+    }
+  }
 
   // Month 표시 동기화 (이번 달 적격월 도달자 확인용 큰 헤더)
   const bigLbl=$('qualm-month-big'); if(bigLbl) bigLbl.textContent=`${qualmSearchYear}년 ${qualmSearchMonth}월`;
 
   // qualmDB에 simline 필드가 없으면 디폴트 LINE 처리
-  const kw = ($('qualm-search')?.value||'').trim().toLowerCase();
   const rows = qualmDB
     .map(r=>({...r, status: calcQualmStatus(r.expDate), simline: r.simline||'LINE'}))
     .filter(r=>
@@ -6681,13 +6714,17 @@ renderQualm = function() {
       (qualmSL==='전체'||r.simline===qualmSL) &&
       (status==='전체'||r.status===status) &&
       (!kw||((r.name||'').toLowerCase().includes(kw)||(r.empid||'').toLowerCase().includes(kw))) &&
-      (r.qualmYm && isMonthDueForRow(qualmSearchMonth, parseInt(r.qualmYm.split('-')[1]), r.simline))
+      // 이름/사번 검색어가 있으면 "그 사람의 적격월이 몇 월이든" 보여줘야 하므로 월 필터를 건너뜀.
+      // 검색어가 없을 때만 기존처럼 현재 선택된 월에 도달하는 사람만 필터링.
+      (kw || (r.qualmYm && isMonthDueForRow(qualmSearchMonth, parseInt(r.qualmYm.split('-')[1]), r.simline)))
     );
 
   updateSidebarBadges();
   const badge=$('qualm-alert-badge');
   if(badge){
-    badge.textContent = rows.length>0 ? `${qualmSearchMonth}월 적격월 도달 ${rows.length}명` : '';
+    badge.textContent = rows.length>0
+      ? (kw ? `'${$('qualm-search').value.trim()}' 검색결과 ${rows.length}건 (월 필터 무시, 전체 적격월 표시)` : `${qualmSearchMonth}월 적격월 도달 ${rows.length}명`)
+      : '';
     badge.style.display = rows.length>0?'inline':'none';
   }
 
@@ -6696,7 +6733,7 @@ renderQualm = function() {
   const crewEmpidSet = new Set((typeof crewDB!=='undefined'?crewDB:[]).map(c=>c.empid).filter(Boolean));
 
   $('qualm-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="10" class="empty-state">${qualmSearchMonth}월에 적격월이 도달하는 인원이 없습니다</td></tr>`
+    ? `<tr><td colspan="10" class="empty-state">${kw ? '검색 결과가 없습니다' : `${qualmSearchMonth}월에 적격월이 도달하는 인원이 없습니다`}</td></tr>`
     : rows.map((r,i)=>{
         const qualmDisp = (r.simline==='SIM' && r.qualmYm2) ? `${r.qualmYm} / ${r.qualmYm2}` : r.qualmYm;
         const isActive = r.empid && crewEmpidSet.has(r.empid);
