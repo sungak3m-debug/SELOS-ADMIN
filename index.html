@@ -52,24 +52,36 @@ html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic'
 
 /* ── 프로필 화면 ── */
 #prof-screen{
+  position:relative; overflow:hidden;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:100vh;padding:40px 20px;background:var(--bg);
+  min-height:100vh;padding:40px 20px;background:var(--navy);
 }
+.prof-bg-video{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  min-width:100%; min-height:100%; width:auto; height:auto;
+  object-fit:cover; z-index:0; pointer-events:none;
+}
+.prof-bg-overlay{
+  position:absolute; inset:0; z-index:1;
+  /* 영상이 완전히 또렷하게 보이기보다 화면 뒤쪽에 은은하게 깔린 느낌이 나도록 어둡게 톤다운 */
+  background:linear-gradient(180deg, rgba(20,18,16,.72) 0%, rgba(20,18,16,.55) 45%, rgba(20,18,16,.8) 100%);
+}
+.prof-logo, .prof-sub, .prof-title, .prof-desc, .prof-grid{ position:relative; z-index:2; }
 .prof-logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
 .prof-logo-circle{width:34px;height:34px;border-radius:50%;background:var(--rg);display:flex;align-items:center;justify-content:center}
 .prof-logo-circle svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2}
 .prof-brand{font-size:15px;font-weight:700;color:var(--sono);letter-spacing:1.5px}
-.prof-sub{font-size:10px;color:var(--muted);letter-spacing:.5px;margin-bottom:52px}
-.prof-title{font-size:20px;font-weight:700;color:var(--navy);margin-bottom:8px}
-.prof-desc{font-size:11px;color:var(--muted);margin-bottom:40px}
+.prof-sub{font-size:10px;color:rgba(255,255,255,.68);letter-spacing:.5px;margin-bottom:52px}
+.prof-title{font-size:20px;font-weight:700;color:#fff;margin-bottom:8px;text-shadow:0 2px 12px rgba(0,0,0,.35)}
+.prof-desc{font-size:11px;color:rgba(255,255,255,.6);margin-bottom:40px}
 .prof-grid{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:40px}
 .prof-card{
   display:flex;flex-direction:column;align-items:center;gap:6px;
-  cursor:pointer;padding:16px 14px;border-radius:16px;border:1.5px solid transparent;
-  transition:all .2s ease;background:var(--surface);
-  box-shadow:0 1px 4px rgba(0,0,0,.06);
+  cursor:pointer;padding:16px 14px;border-radius:16px;border:1.5px solid rgba(255,255,255,.14);
+  transition:all .2s ease;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);
+  box-shadow:0 4px 20px rgba(0,0,0,.25);
 }
-.prof-card:hover{border-color:var(--rg2);transform:translateY(-4px);box-shadow:0 8px 24px rgba(200,146,122,.18)}
+.prof-card:hover{border-color:var(--rg2);transform:translateY(-4px);box-shadow:0 10px 28px rgba(0,0,0,.35)}
 .p-av{
   width:68px;height:68px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
@@ -481,8 +493,12 @@ select{font-family:inherit}
      프로필 선택 화면
 ════════════════════════════════════════════════════ -->
 <div id="prof-screen">
+  <video class="prof-bg-video" autoplay muted loop playsinline>
+    <source src="bg-video.mp4" type="video/mp4">
+  </video>
+  <div class="prof-bg-overlay"></div>
   <div class="prof-logo">
-    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMkAAAAvCAYAAABJ2+6aAAARb0lEQVR4nO2ceVBcx53Hv/3em4NhhrlhZmDEMRKXOAXCQod12TpiSY69tetYtnxm5U2tk81uKtna2lQ5/+z+Ya+dLV+7ckW2dTgp37Gk6LKQBSiAJBA6OMQlTnENzAwDcx+9fyDGDAIGCbCV7PtUTRV09+v+9Xv97ePX/R5xjFnAw8MzM8z3bQAPz/0OLxIengjwIuHhiQAvEh6eCPAi4eGJAC8SHp4I8CLh4YkALxIengjwIuHhiQAvEh6eCPAi4eGJAC8SHp4I8CLh4YkALxIenghw882gsbGZyjgRzE4PfD4fAIAQEoqf+JMQEgqf+Hvyj2EYMAwDjuMQLRHDZjUjIyONTM6Lh+f7gCzU+ySD5iFqsTjgcnvg9/u/LYAgTBwgBAR3CkUoFEIsFkIaHYRapeeVwXPfsGDTrVithixbaiTRUQxAfRAKBWCY2ds6wzAQCgWIEgsQDLgQr1dH8wLhud9YsJFkKlarrXrM6S6wWsfg8/lCowgAMLdHDrlCBiFLodVqeGHw3Lfc80gyYrOdcbvdWyml08YrlYpCY7yOxOtVZgY+xMhliIoSQy6Lht/nhFYtRbxOTWYTiMfjXmez2Urv1UYenoXgnkeSwQsXqM9qASeVgpVGw+YNgJXHQB0bVxKjVDw0NX0gEIDL5X5FLBa9xnGcc2r8qN3+/tDQ4PND5kHo1RJ4PWPwuhwQRkmRsnwNP9LwfG/cs0j6urqpq6IcPo9n3Dt1eypFQSCMkcGl1iKlqChDKBTemCmPQCCAqzWVVBCwwD1mB0BBAVBKQSkFx7GQGwuxLDV9WpGUl5XTS1UXEKRBUFAE/QF4fT4QhkAoEIIwBIQwEAmF+IeX/1Eh4LiRe6rsXyg9PT30m7NnYBmyYseju2AymfjO5h6Y15qkobycCtrbEJxmykUIQXScDpoNG4tFIlHV1PhAIID2uvPUMtiJYHD663UJ6UjMLJr1wQZpEMFAUEIpldfX1fcePngQOp0OP/35PxUzDNPJMEwfIUxEJ8JfI598/CltbW7C0NAQcvPz8Oxzz/3/uwkLwLz2SVKLi6N7bRaHy3Kn0CilcAz0w1FdXZm65s7pUmPdFeqcQSAAIIqSIjY5+4lINjCEAcMxTgBOlrtdHUIwnTBPHD9BPR5PyA09PDyMzMxMFBQWagUCbmgiXWdnF71QVQUBIdjx2A8NAoGgr79/kJ4tOYPH/+bxbWKx+NR0tpz5+gRNSl6GpUuXEgC4WHWRdnR2YM3atYiPN5DKyira09UdcmBQUIxbAoBSgBDs3LVjW19f38maSzXw+rzTlnfq5CmauTwTRqNx1kY/ONCPH7+0F6+/9hoa6uthsVg6VCpV0uQ0LpfjuaNHj38gFUvxg13bQ/kdLT1GAxY/CCHw+/ywj9qRnZON/Px8wrIsAODc6XN0eNSCwsICJCYmzkmAra2t9GZbE7ZsfSQs/Z+O/YmaB/uRlpGJ4uJiAox3pCeOHqFOjw+G+HisXRvejq5fr6PtbTexY9cOwjAMOjs66ckTJzE6aoff60N0jBRabRxSTMkoKpq9s52NebmAOY5zjmm0oanWVCilEFuGpo1jfeYZBUIIwEbrERUV9cl87JtKU2MjyktLESUWIyZGjihOgM8//RQf7N9vnpzOYrHgYlUVamprEQwGEwFgbMyO2poa/P7wRydnyv9GQwtsFmvo/+bmG7hYWYmRkfFZnsGgR7IpBfEJ8WAJcKGiAr23emAwGJCUnITUtFQIBIJTRqMxuqe7CzWXLuHY0WNh5bW0tNLWluaIAmlpaaVCoQCxsbHEmGCE3+dHQ0Nj4tR0brf3ny9UVODq9drwulTWo7z0HGJiYqBUKcGyLD7+/R9w6MDB0EMLMA5Unj+P1tbWO8ofG3O84nK5H5safv3adTgc3rAwq9V69WrtFTTUN+JCZSUmnEEsy0Kj0+NiVRWOHz2KQbM5rMFUVVQgPiEeDMPA4XD88qPDhyDgODy0ZQse3r4NGo0W167U4sSxY7PdqojMe5/EtKKgWKzVzBjvGRnBqM12ZHKY3++TO+22Ga+RSOVIWpb19nxtm4nsnBxs3LSBPPnsHvLghg1oaW5GU1Pz9IqdQn1dHf733f+ho6Ojb91tuYmJiaSwsICsXl1MDAkJAACpLAZr1q4mK4tWktzcHMKyLDiOc+7e8zTkCgWqKipw8eIlCoy71b/68kus37gpYlnnS88hMSkZAJC+fDkopbjR0HCXFhOsKFhxdNPmTWTPM3vIygeK0NjQgO7ubgoAGZn5YBgGl6trEAwGw6788P39vzl44MMvpuZosQwjOycnLKyq6kLOuvUPIik5GT3dPWhpaQ09i1WrVpHMrCy43W4cO/JtMzp7tpSKo8QoKCwgAFBypuRVx6gDTz2zpzAvL5cUFKwgT+5+kvziV7+0vbh3713WO5x5i0QkElVFFxSBEwimjSeUwmI275wcZrePtAQC3mnTsywLTWIBZDLZT+dr21xYVbwKANDX1xcxbZQkCvHx8WhuasJnn3z28tSGsZDExsaSNevWgVKKc2fPIhAI4FxJSUFWdjayspbPOop0dnbSpqZmrCgoAACYTCawLIuO9nZM17vPBUIIVhY9gGAwiIH+AQCAwWAgOp0OgwMDuHWrN9SwBwcHaVdnF1qamtHb2xcK9/rc2WOjY1i6NNyBMDjQj9VrVhNDfDyCwSAu19SElb3r0V2QSCRoqKtD9aVq2t3dQ/9c9g127NwVSuh0OuDxevDFZ59Xe73e9IlwtVqtTEhImNdabEF23FWxsSSgmnk0GZk0BQEA+4hNOzGvnQrlZNDHzz6VWEja29vBMAySk5MiphUKhdj5w0ehUqtQX3cdhw4cok6nc37d1CwUF696KSkpCYMDAzj61VFqtdmwcdPG4kjX1dXVIzE5GRqNmgCA0ZgQHavVwu12o/by5Tt697nS3n4TLMvCuMQYClPrtQgGg+js6AiF1V6uRVJyEgCKpqamUHhDfeM1uUIelmdfXz8lhIBlWaSmpYEQguHh8Cm6RqMhG7c8BIDg61On8U1JCTZs2gylUlE4kSY3Lx8ioQg11Zfw4f4PGo8cOUK7urrnNDuIxIIdS1Hl5IDjpvgBCEAYgoRoZViwZXgYAo4Fy4YXz7IMNMbMhTJpRtxuFywWa0tlRRX96ssvkWIyzWnhSSlFSkoKeflnPyvTaDS4eqUWBw8c3LdYdkokkveeemZPp1gsxvnyMqx84IFpHRJTaW9rhUwmw9mz39CSkrO0tLTMYTAuQTAYxKWLF+/KBofDsdNisXSUlZbRM6dOITUtDXFxcaF7lbwkBcC3I3EwGMTV2lo8vGUrAILB26MOAFy/eg1LEpPC8q84Xw5TsgkAkJGRTnR6HTrabqKvry+sgW/euIlkZGbCbB6Ew+nEugfXhT2vjIx08sTuJ6Ez6NHUdAPnSs7inTffxOeffTbvjmzep4An0BgMJJhsorbW5nGvzaRTv35HuPcrQafAQPu4KCiAYGB82hKjMiDFtGxRRxFKKQ59eAB+v3+py+VCfkE+duzcdfRu8lAoFOt3PfYYPXzwIFqamnDi+Am6/QfbF8VulUqVJIuRUZfLhfh4Q2ek9IODg7T3Vi+8Hi/M/f2hcAoKhmHQ09WN3t4+ajBEPiNHKcXv9r0Hr9eb6Ha78UBREbbteCRsrZiYmHi73HExdHf3UJVaBdNSE9FoNbSttQWUUvj9fn1b202sfXB96FqXy/V3V2qvYNdjyaivb6CEECwxLkF/Xz+uX7sOvV4fZo9coQCAO8InyMnNIVnZWaiurqY1l6rR1tqKivN/RvONpn3/9ut/fy9SfWdiwUQCANKc3F85+2+96nM6AdwWCQEYf/j6g/qdYBgClmEASuEPEnACITSJebaFtGc6CCHY+5OfQC6Peen1V1/d53S6IZPJdt1tPpmZGeTFv/8xPXTgAM6cPg2320MJs7iv51BK5ZHSXCgtw9L0VLzw/At3iOCdN9+ibW1tuHb1GgyG6RvaZAgh+Pkv/uVwMBA0/fcbbxQPWwOQSqVha0WjMYHodDp6q6cHHo9nVUN9PTKXZ4NhGOSvKMCZ06fR0NBICSGIjpYgMXFJyK5Ll6o/1mg0sA0Nw4rxKZZCqQDDMLhYVYWNmzbqBQJBaLE4sR0301EoYPzQbFFRESkqKkLpuVJ65I9/xMBA/4zp58KCPlWJNPo1X5wh9G7IxC/o8YSlo343WIaAY8fjWY4BI4mFWq1WzpD1gkIphUQieS+/oBBNjY0oKyu/p7mryWQij+zYCZZlcL6sFF2dETv6RcXpdO69ePkyUhJN08arY2MBAL23bs05T0qpXKFUrM7Jy0drSw0uVF0Iu1cMw2B5dg68Hi/q6uorh4aGUFC4ohgAClcW2gghaKyvR1trKzIyl4OZ1JG0NDdj9dp1eHj7VrJl+zayZfs2snX7dmJcYoTNZkNLc2vvXO30+Xx3qD4tPQ0AQMj8mvmCd32xy7NOSmIUIYEQhkXA7Qx3EQY8YFkGLEvAcQwkkmjEJ2cttCkR2bBxw3/odDpUnD8Pi8XScS95rCxaSZ565lkoFAoEAv7IFywilZVV+0AI8gvypp0+5uXlgWEYtLW2wGYbOXM3eW/avKlEpVaj7Fwp7Hb7oclxWdlZIISg4epViEWi0LpJrVYrk1NMuHblCvr7+pCblxe6xmYbOeMYHcWKgvw7RrzklKUIBoO4fu3qnGxzu91bf/tfr/e+v38/LS0to52dXbSjo4OePv01OJZFdm5O5ExmYcFFIlfIt7PZOeCEAhCWAcMyoD4/nA7HGwDg9/slCHrAMgQsy0Ao4CBWL4M2Nnbec3pKKViWmXFzEwRhzgKpVPrrHz21G6N2Ow68/36i2+3eOjmfycP6xHmy6cjNzSE/2r0bUZLo8DQU4/Wf5rqJMubCxJubkehsa0NOXi7kcvm008fU1GVEp4uD1+tFbe3lzbdtFDAMg+nu2Pg9gAQAFAr5Q3/7xBOwWIbx0cHDT0/uuZcsMRKdXodrdXWQymRheRgS4uFyuzA6aofR+K0rtry0bHOc3oDpvJwZmengOA4dHe1h947cfn5T31blOK583fr18Hm8OHn8ON598028+9bbGOzrwzPPP4sXXnxxXm1r0d4naT11korGRkEIIBQIgMJViNXriGNs7JXRznO/8Xj9CAQCEEtV0KdtWJDXdN1u99bh4aGTAoEQsdOIbnh42Or3+xUajYZMfjhDQ8Mev88nVKmUhUKRqMbr9aZbLdZGQgi0sVpCCIHP59NbLNbeuLiZxWyz2UrFYvF/ThwjGRmxf+52ux5XKpV3HPR0Op17bTbrvqgoyTWlUpk7W70GBgZoIOBHXJyOzOQ6B4D+/n4aExPzkkQimXGROjxsGfR4XFqhUOzVaNSiYDAAs3mIsgwHjVYdqtuQeYgGggFotVoyWaBms5n6/QGo1aqwOlktlhaP17dUqVQWikTC0P6Fx+NZZbXaKkUiYVg9zeYhKo4SvyqTSv91qo2U0nHvFqXQ6fWh8u12+6GxsdGnZbKYt2faR3O73VvtdvtJluXMCoU8drb7NVcWTSQ3GxtpdGsT/IEAREIhRkxpMKWlkoH+PiocuQKXxwcKwBI0IDuvkD94x3PfsmjumOT0dGKXycf3TgjBxH683T4CTsBCIGAhkcchM/vOOSkPz/3EoomEEIKk1WsTObEYIIDbMQoAkIhYsAyBQCCAQJX+3kIMhzw8i8miOvYFQkGXVRYDwjLwudwAAI9rDIQATiKDVCZ/aTHL5+FZCBb943SGrNyXOYkEXrcLAODzuiAUiRClTP1+NxV4eObIootEEi15x6E3IjXBAADweNwYZZOgVKmTFrtsHp6F4Dv5zKkhxUSYKDEAIDs19Qu55rs75cvDM1++s28Be6NjOgFgDBIJ/+lSnr8kFm2fhIfnrwX+q/I8PBHgRcLDEwFeJDw8Efg/IW3VrYVhvoYAAAAASUVORK5CYII=" alt="Trinity Airways" style="height:36px">
+    <img src="data:image/png;base64,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" alt="Trinity Airways" style="height:36px;filter:brightness(0) invert(1)">
   </div>
   <div class="prof-sub">SELOS ADMIN · 운항표준팀</div>
   <div class="prof-title">담당자를 선택하세요</div>
@@ -1184,6 +1200,7 @@ select{font-family:inherit}
           </div>
           <div class="filter-actions" style="margin-left:auto">
             <button class="btn btn-outline btn-sm" onclick="resetFlycoFilter()">초기화</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--line);border-color:#C8D5E4" onclick="reprocessStoredFlycoFiles()" title="재업로드 없이, 이미 저장돼 있는 원본 PDF들을 통째로 다시 파싱해서 지식/기량 짝짓기를 재시도합니다"><i class="ti ti-refresh"></i> 저장된 파일로 재인식</button>
             <button class="btn btn-outline btn-sm" style="color:var(--fail);border-color:#EDD0CC" onclick="clearFlycoAll()"><i class="ti ti-trash"></i> 전체 삭제</button>
             <button class="btn btn-excel btn-sm" onclick="exportFlycoAnalysis()"><i class="ti ti-file-spreadsheet"></i> 심사결과분석 다운로드</button>
           </div>
@@ -1717,14 +1734,23 @@ function calEvClass(type) {
 }
 
 // ⚠ 표의 모든 행이 같은 높이를 유지하도록 항상 한 줄(<br> 없이)만 반환한다.
-// 지식/기량 날짜 등 상세 정보는 title 툴팁(마우스 오버)으로만 보여준다.
+// 지식+기량 세트인 경우 날짜를 이제 항상 옆에 작게 같이 표시한다(예전엔 title 툴팁에 숨어있어서 마우스를
+// 올려야만 보였는데, "지식심사를 언제 봤는지 표에서 바로 안 보인다"는 피드백으로 상시 노출로 변경).
+// ⚠ 예전엔 이 날짜 표시가 r.type==='인정'일 때만 동작했는데, 심사기록부 자동반영은 정기/수시 등
+//   다른 심사종류에도 dateKnow/dateSkill을 채워주므로 종류와 무관하게 동작하도록 확장했다.
 function getProcessDisp(r) {
+  const placeTip = [r.placeKnow?`지식장소 ${r.placeKnow}`:'', r.placeSkill?`기량장소 ${r.placeSkill}`:''].filter(Boolean).join(' · ');
+  const mmdd = d => d ? d.slice(5).replace('-','/') : '';
+  if (r.dateKnow && r.dateSkill) {
+    const examinerTip = r.knowExaminer ? `지식심사관 ${r.knowExaminer} / 기량심사관 ${r.examiner||'—'}` : '';
+    const tip = [`지식 ${r.dateKnow} / 기량 ${r.dateSkill}`, examinerTip, placeTip].filter(Boolean).join(' · ');
+    // 날짜가 다르고 지식심사 심사관도 기량과 다르게 확인된 경우, 심사관이 갈릴 수 있다는 걸 놓치지 않도록
+    // 날짜 옆에 "(심사관 상이)" 표시를 상시 노출한다 — 정확한 이름은 툴팁으로.
+    const diffNote = (r.dateKnow !== r.dateSkill && r.knowExaminer) ? ' <span style="color:var(--fail);font-size:9px" title="지식심사 심사관: '+r.knowExaminer+'">⚠심사관상이</span>' : '';
+    const dateTxt = r.dateKnow === r.dateSkill ? mmdd(r.dateKnow) : `지식${mmdd(r.dateKnow)}·기량${mmdd(r.dateSkill)}`;
+    return `<span title="${tip}">지식+기량 <span style="color:var(--muted);font-size:9px;white-space:nowrap">(${dateTxt})</span>${diffNote}</span>`;
+  }
   if (r.type==='인정') {
-    const placeTip = [r.placeKnow?`지식장소 ${r.placeKnow}`:'', r.placeSkill?`기량장소 ${r.placeSkill}`:''].filter(Boolean).join(' · ');
-    if (r.dateKnow && r.dateSkill) {
-      const tip = [`지식 ${r.dateKnow} / 기량 ${r.dateSkill}`, placeTip].filter(Boolean).join(' · ');
-      return `<span title="${tip}">지식+기량</span>`;
-    }
     if (r.dateSkill) return `<span${placeTip?` title="${placeTip}"`:''}>기량</span>`;
     if (r.dateKnow) return `<span${placeTip?` title="${placeTip}"`:''}>지식</span>`;
   }
@@ -4908,6 +4934,11 @@ let flycoDB = []; // 업로드된 심사기록 목록 (기량 체크만 — 지�
 let flycoFiles = {}; // 원본 PDF 파일 (filename -> base64 dataURL), 다운로드 버튼용
 let flycoMode = '분기';
 let flycoPeriodKey = null;
+// 지식(KNOWLEDGE) 체크가 짝이 되는 기량 체크와 같은 업로드 배치(같이 선택해서 올린 파일들)에 없으면
+// 예전엔 그 자리에서 버려졌다 — 지식/기량 PDF를 서로 다른 날 나눠서 올리면(실제로 흔한 업로드 패턴)
+// 지식 반영이 통째로 안 되는 원인이었음. 짝을 못 찾은 지식 레코드를 여기 보관해뒀다가, 나중에
+// 기량 PDF가 올라오면(또는 반대로 기량이 먼저 있고 지식이 나중에 오면) 다시 매칭을 시도한다.
+let pendingKnowDB = [];
 
 function setFlycoMode(mode) {
   flycoMode = mode;
@@ -5074,6 +5105,16 @@ function parseFlycoText(text, filename) {
     if (!rec.qual) { const dutyM = block.match(/Duty code\s+(\w+)/); if (dutyM) rec.qual = dutyCodeToQual(dutyM[1]); }
     if (!rec.qual && /<CAPT>/i.test(titleLine)) rec.qual='기장';
     if (!rec.qual && /<F\/O>/i.test(titleLine)) rec.qual='부기장';
+    // ⚠ 비행교관(LIP) 인정심사가 전용 서식("LIP/SIP", "LIP VALIDATION SHEET")이 아니라 일반
+    //   KNOWLEDGE/LINE 서식 그대로 쓰이는 경우가 있음 — 이때 CHECK-TYPE이 "OTHERS"로 찍혀서
+    //   아래 심사종류 추론에 안 걸리고, Trainee Role도 "비행교관(LIP)"이라 위 정규식에도 안 걸려서
+    //   자격·심사종류가 둘 다 빈 값으로 남았었다(지식/기량 짝짓기까지 실패하는 원인). Trainee Role에
+    //   "비행교관" 또는 "(LIP)"이 보이면 서식 종류와 무관하게 LIP임무수행능력검증으로 바로 확정한다.
+    if (/Trainee Role\s+비행교관|Trainee Role[^\n]{0,20}\(LIP\)/i.test(block)) {
+      rec.qual = '교관';
+      rec.type = 'LIP임무수행능력검증';
+      rec.subtype = '';
+    }
 
     // 심사일 (ISO 형식 우선, DD/MM/YYYY·YYYY.MM.DD 폴백)
     const dateIso = block.match(/CHECK\s*-\s*DATE\s+(\d{4}-\d{2}-\d{2})/) || block.match(/(\d{4}-\d{2}-\d{2})/);
@@ -5360,13 +5401,62 @@ async function processFlycoFiles(fileList) {
   // 같은 배치(한 번에 올린 파일들) 안에서 같은 사번의 기량 레코드에 종류·세부구분을 상속하고,
   // 심사일이 기량 체크와 다르면(레이오버 등으로 여러 날 걸리는 정기심사) dateKnow(지식)/dateSkill(기량)로 병합한다.
   // ⚠ 지식/기량이 서로 다른 PDF 파일로 업로드되는 경우가 많으므로 반드시 파일 하나가 아니라 배치 전체(allRawRecs)에서 찾는다.
+  function applyKnowledgeMerge(r, sib) {
+    r.type = sib.type; r.subtype = sib.subtype;
+    if (sib.date && sib.date !== r.date) { r.dateKnow = sib.date; r.dateSkill = r.date; }
+    // 지식+기량이 세트인 경우 통계는 기량 1건으로만 잡되, 지식심사 결과(PASS/FAIL)는 참고용으로 같이 보관.
+    // 지식심사는 점수 없이 합격/불합격만 확인하면 되므로 rec.score(Total Grade)는 쓰지 않음.
+    if (sib.result) r.knowResult = sib.result;
+    // 지식심사일이 기량심사일과 다르면(레이오버 등으로 날을 나눠 봄) 심사관도 서로 다를 수 있으므로
+    // 기량 심사관(r.examiner)을 덮어쓰지 않고 지식 심사관은 참고용으로 별도 보관한다.
+    if (sib.examiner && sib.examiner !== r.examiner) r.knowExaminer = sib.examiner;
+    // ⚠ 국토부 제출용 내보내기(exportKrionSubmission)는 r.process가 "지식+기량"이어야 지식/기량 2줄로
+    //   분리해서 뽑는다. 예전엔 여기서 process를 안 바꿔서(항상 '기량') 심사기록부로 자동 반영된 건은
+    //   지식 행이 국토부 제출용에서 통째로 빠지고 있었음 — 날짜가 같은 날이어도 process는 세트로 표시.
+    r.process = '지식+기량';
+  }
+  const consumedKnowIds = new Set();
   allRawRecs.forEach(r=>{
     if (r.process==='기량') {
-      const sib = allRawRecs.find(s=>s.process==='지식' && s.empid && s.empid===r.empid && s.type);
-      if (sib) {
-        r.type = sib.type; r.subtype = sib.subtype;
-        if (sib.date && sib.date !== r.date) { r.dateKnow = sib.date; r.dateSkill = r.date; }
+      const sib = allRawRecs.find(s=>s.process==='지식' && s.empid && s.empid===r.empid && s.type && !consumedKnowIds.has(s.id));
+      if (sib) { applyKnowledgeMerge(r, sib); consumedKnowIds.add(sib.id); }
+    }
+  });
+  // ── 짝을 못 찾은 지식/기량 레코드 재시도 (다른 날 나눠서 업로드된 경우) ──
+  // ⚠ 예전엔 지식/기량이 같은 배치(한 번에 선택한 파일들) 안에 없으면 매칭을 아예 포기했고,
+  //   특히 짝이 안 맞은 지식 레코드는 이 함수가 끝나는 순간 통째로 버려져서(flycoDB에 지식은
+  //   저장 안 함) 나중에 기량 PDF가 올라와도 다시는 매칭될 기회가 없었다 — "지식심사 반영이
+  //   아예 안 된다"는 문제의 실제 원인. pendingKnowDB에 임시 보관해뒀다가 양방향으로 재매칭한다.
+  let retroKnowFixed = 0;
+  // (1) 이번 배치의 기량 레코드가 아직 못 찾았으면 → 예전에 쌓아둔 pendingKnowDB에서 찾는다
+  allRawRecs.forEach(r=>{
+    if (r.process==='기량') {
+      const idx = pendingKnowDB.findIndex(s=>s.empid===r.empid && s.type && (!r.type || s.type===r.type));
+      if (idx>=0) {
+        const sib = pendingKnowDB[idx];
+        applyKnowledgeMerge(r, sib);
+        pendingKnowDB.splice(idx,1);
       }
+    }
+  });
+  // (2) 이번 배치의 지식 레코드가 아직 못 찾았으면 → 이미 저장된 flycoDB(기량)에서 찾아 뒤늦게 반영,
+  //     그것도 없으면 나중에 기량이 올라올 때까지 pendingKnowDB에 보관
+  allRawRecs.filter(s=>s.process==='지식' && !consumedKnowIds.has(s.id)).forEach(sib=>{
+    const existing = flycoDB.find(d=>d.empid===sib.empid && d.process==='기량' && (!d.type || d.type===sib.type));
+    if (existing) {
+      applyKnowledgeMerge(existing, sib);
+      // 지식이 뒤늦게 붙어서 "⚠지식누락" 사유가 해소됐으면 검토 필요 상태를 다시 계산한다
+      // (다른 사유로 이미 검토 필요였다면 그 사유들은 그대로 유지)
+      existing.needsReview = !existing.ac || !existing.name || !existing.date || !existing.result || !!existing.examinerFailed || !existing.type
+        || (existing.source==='Trinity' && existing.process!=='지식' && existing.type!=='LIP임무수행능력검증' && !existing.score)
+        || (existing.type==='인정' && !existing.subtype)
+        || !!existing.examinerReviewReason || !!existing.subtypeInvalid
+        || (existing.matchedCrew===false && /^[A-Z .]+$/.test((existing.name||'').trim()));
+      if (existing.note) existing.note = existing.note.replace(/⚠ (정기|인정)심사는 지식심사\(KNOWLEDGE\)가 함께 있어야[^/]*\/?\s*/,'').trim().replace(/\/\s*$/,'').trim();
+      if (existing.planRowId || existing.result) syncFlycoResultToPlan(existing);
+      retroKnowFixed++;
+    } else {
+      pendingKnowDB.push({id:sib.id, empid:sib.empid, name:sib.name, type:sib.type, subtype:sib.subtype, date:sib.date, result:sib.result, examiner:sib.examiner, ac:sib.ac, simline:sib.simline, qual:sib.qual, filename:sib.filename});
     }
   });
   // 파싱 신뢰도 체크 — 핵심 필드가 비어있으면 "검토 필요" 표시 (심사관 자동인식 실패도 포함)
@@ -5375,12 +5465,31 @@ async function processFlycoFiles(fileList) {
   allRawRecs.forEach(r=>{
     r.needsReview = !r.ac || !r.name || !r.date || !r.result || !!r.examinerFailed || !r.type
       // LIP임무수행능력검증(LIP VALIDATION SHEET)은 총점(AVERAGE) 없이 PASS/FAIL만 있는 서식이라 점수 없음을 정상으로 취급
-      || (r.source==='Trinity' && r.process==='기량' && r.type!=='LIP임무수행능력검증' && !r.score)
-      || (r.type==='인정' && !r.subtype);
-    if (!r.type) r.note = (r.note ? r.note+' / ' : '') + '⚠ 심사종류를 인식하지 못했어요 - 직접 확인 필요';
+      || (r.source==='Trinity' && r.process!=='지식' && r.type!=='LIP임무수행능력검증' && !r.score)
+      || (r.type==='인정' && !r.subtype)
+      // 정기/인정심사는 LINE/SIM 상관없이 지식심사가 항상 같이 있어야 한다. LINE은 지식이 없으면
+      // 애초에 심사종류 자체를 못 정하므로 위 !r.type에서 자동으로 걸리지만, SIM은 자체 CHECK-TYPE
+      // 필드가 있어 지식 없이도 심사종류가 정상 인식돼버려 별도로 체크해야 놓치지 않는다.
+      // LIP임무수행능력검증(교관 인정심사)도 마찬가지로 지식+기량 세트가 필요하다.
+      || (['정기','인정','LIP임무수행능력검증'].includes(r.type) && r.process==='기량');
+    if (!r.type) {
+      // LINE 심사 문서 자체에는 심사종류(CHECK-TYPE) 필드가 없어서, 같은 사번의 지식(KNOWLEDGE) 문서에서
+      // 심사종류를 상속받는 게 정상 경로다. 짝이 되는 지식 파일을 못 찾아 상속이 안 된 경우를 구분해서 안내한다.
+      const isStandaloneLine = r.process==='기량' && r.simline==='LINE';
+      r.note = (r.note ? r.note+' / ' : '') + (isStandaloneLine
+        ? '⚠ LINE 단독 업로드로 보여요 — 지식심사(KNOWLEDGE) 파일과 짝을 찾지 못해 심사종류를 확인할 수 없어요. 수정 버튼으로 직접 선택해주세요'
+        : '⚠ 심사종류를 인식하지 못했어요 - 직접 확인 필요');
+    } else if (['정기','인정','LIP임무수행능력검증'].includes(r.type) && r.process==='기량') {
+      r.note = (r.note ? r.note+' / ' : '') + `⚠ ${r.type}심사는 지식심사(KNOWLEDGE)가 함께 있어야 하는데 짝이 되는 지식심사 파일을 찾지 못했어요 - 지식심사 PDF를 같이 업로드했는지 확인해주세요`;
+    }
   });
-  // 심사결과분석은 기량(마뉴버 체크) 결과만 다루므로, 지식(KNOWLEDGE) 체크는 위 상속에만 쓰고 최종 목록에서는 제외
-  let allNewRecs = allRawRecs.filter(r=>r.process==='기량');
+  // 심사결과분석은 기량(마뉴버 체크) 결과만 다루므로, 지식(KNOWLEDGE) 체크 단독 레코드는 최종 목록에서 제외.
+  // ⚠ 중요: 지식+기량 매칭에 성공한 기량 레코드는 r.process가 '기량'에서 '지식+기량'으로 바뀐다
+  // (국토부 제출용 내보내기가 이 값으로 세트 여부를 판단하기 때문). 그런데 예전 필터가
+  // r.process==='기량'만 남기고 있어서, 매칭에 "성공"한 기록이 오히려 여기서 전부 걸러져
+  // 사라지는 심각한 버그가 있었다 — 매칭 실패("⚠지식누락")한 것만 화면에 남다 보니 지식+기량이
+  // 아예 인식이 안 되는 것처럼 보였던 원인. '지식'(순수 지식 단독) 하나만 제외하도록 수정.
+  let allNewRecs = allRawRecs.filter(r=>r.process!=='지식');
   // ⚠ 이번에 올린 배치 안에서 같은 사람·같은 심사일·같은 기종/구분이 여러 번 나오면(예: PDF 블록이
   //   페이지 구분자 오인식 등으로 중복 분리된 경우) 하나만 남긴다. 아래의 flycoDB 대조 중복제거는
   //   "이미 저장된 기록"과만 비교하기 때문에, 이번 배치 내부에서 생긴 중복은 걸러내지 못해
@@ -5409,6 +5518,11 @@ async function processFlycoFiles(fileList) {
   resolveFlycoIdentities(allNewRecs);
   flycoDB.push(...allNewRecs);
   const syncedCount = syncAllFlycoResultsToPlan();
+  if (retroKnowFixed>0) {
+    if (typeof saveToStorage==='function') saveToStorage();
+    if ($('page-plan')?.classList.contains('active') && typeof renderPlan==='function') renderPlan();
+    if ($('page-result')?.classList.contains('active') && typeof renderResult==='function') renderResult();
+  }
   if (st) {
     st.style.display='block';
     const unmatchedExaminers = allNewRecs.filter(r=>!r.matchedExaminer).length;
@@ -5417,7 +5531,9 @@ async function processFlycoFiles(fileList) {
       + (syncedCount?` · 🔄 심사결과 관리에 ${syncedCount}건 자동 반영됨`:'')
       + (lastAutoPairedCount?` · ✈ SET 심사 ${lastAutoPairedCount}쌍 자동 결합됨`:'')
       + (flycoReplacedCount?` · 🔁 동일 파일 재업로드로 ${flycoReplacedCount}건 교체됨`:'')
-      + (flycoDupSkipped?` · 중복 ${flycoDupSkipped}건 자동 정리됨`:'');
+      + (flycoDupSkipped?` · 중복 ${flycoDupSkipped}건 자동 정리됨`:'')
+      + (retroKnowFixed?` · 📚 예전에 올려둔 지식/기량 심사 ${retroKnowFixed}건 뒤늦게 짝지어짐`:'')
+      + (pendingKnowDB.length?` · ⏳ 짝을 못 찾은 지식심사 ${pendingKnowDB.length}건 대기 중(기량 PDF 업로드 시 자동 매칭)`:'');
   }
   renderFlyco();
   saveFlycoToCloud();
@@ -5433,6 +5549,35 @@ function clearFlycoAll() {
   flycoFiles = {};
   renderFlyco();
   saveFlycoToCloud();
+}
+// dataURL(base64) → File 객체로 복원 (저장된 원본 PDF를 다시 파싱 파이프라인에 넣기 위함)
+function dataURLtoFile(dataurl, filename) {
+  const arr = dataurl.split(',');
+  const mimeMatch = arr[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new File([u8arr], filename, {type: mime});
+}
+// ⚠ 재업로드 없이 복구하기: 지식/기량이 서로 다른 배치(다른 날 올린 파일)에 있으면 짝짓기가
+//   실패하던 예전 버그 때문에, 짝 못 찾은 지식 레코드가 버려진 채로 지금 flycoDB에 남아있는
+//   기량 기록들이 있을 수 있다. 다행히 원본 PDF 파일 자체(flycoFiles)는 항상 남겨뒀으므로,
+//   저장된 파일 전부를 한 번에 다시 파싱 파이프라인에 넣으면(=하나의 큰 배치로 취급) 지금 고쳐진
+//   매칭 로직이 자동으로 지식+기량을 다시 짝지어준다. 사용자가 PDF를 다시 찾아 올릴 필요가 없다.
+async function reprocessStoredFlycoFiles() {
+  const filenames = Object.keys(flycoFiles);
+  if (!filenames.length) { alert('저장된 심사기록부 PDF 원본이 없어요.'); return; }
+  if (!confirm(`저장된 원본 PDF ${filenames.length}개를 전부 다시 불러와서 지식/기량 짝짓기를 재시도할까요?\n(재업로드 없이 진행되며, 기존 기록은 다시 파싱한 값으로 갱신됩니다)`)) return;
+  let files;
+  try {
+    files = filenames.map(fn => dataURLtoFile(flycoFiles[fn], fn));
+  } catch(e) {
+    alert('저장된 파일을 복원하는 중 오류가 발생했어요: ' + e.message);
+    return;
+  }
+  await processFlycoFiles(files);
 }
 function deleteFlycoRow(id) {
   const idx = flycoDB.findIndex(r=>r.id===id);
@@ -5547,12 +5692,14 @@ function findMatchingPlanRow(fr) {
 }
 // 매칭되는 심사계획 행이 없을 때 심사기록부 데이터로 신규 행을 만든다
 function createPlanRowFromFlyco(fr) {
-  const isMulti = fr.dateKnow && fr.dateSkill && fr.dateKnow !== fr.dateSkill;
+  // 지식+기량 세트면(같은 날이어도) 국토부 제출용 내보내기가 인식할 수 있게 두 날짜를 항상 채워둔다.
+  const isCombined = fr.process === '지식+기량' || (fr.dateKnow && fr.dateSkill && fr.dateKnow !== fr.dateSkill);
   const row = {
     id: nextId++, simline: fr.simline||'LINE', type: fr.type||'', subtype: fr.subtype||'',
     process: fr.process||'기량', ac: fr.ac||'', qual: fr.qual||'',
     empid: fr.empid||'', name: fr.name||'', date: fr.date,
-    dateKnow: isMulti?fr.dateKnow:'', dateSkill: isMulti?fr.dateSkill:'',
+    dateKnow: isCombined?(fr.dateKnow||fr.date):'', dateSkill: isCombined?(fr.dateSkill||fr.date):'',
+    knowExaminer: fr.knowExaminer||'',
     flight:'—', examiner: fr.examiner||'—', place:'—', note:'', setId:null, result:''
   };
   DB.push(row);
@@ -5569,7 +5716,7 @@ function syncFlycoResultToPlan(fr) {
   // 심사기록부가 항상 우선이므로 결과뿐 아니라 심사관·심사종류·세부구분·기종·자격도 함께 맞춘다.
   // (심사결과분석에서 심사관을 바로잡아도 심사계획/결과 관리에는 반영이 안 되던 문제 수정 —
   //  단, 한글 이름으로 확인된(matchedExaminer) 심사관일 때만 덮어써서 검증 안 된 값이 넘어가지 않게 한다)
-  const snapshot = JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual]);
+  const snapshot = JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual, row.process, row.dateKnow, row.dateSkill, row.knowExaminer]);
   row.result = fr.result;
   if (fr.matchedExaminer && fr.examiner && fr.examiner!=='—') row.examiner = fr.examiner;
   // 세부구분은 종류와 세트로 함께 맞춘다(비어있어도 덮어씀) — 그래야 심사기록부 쪽에서 잘못된
@@ -5578,7 +5725,16 @@ function syncFlycoResultToPlan(fr) {
   if (fr.type) { row.type = fr.type; row.subtype = fr.subtype || ''; }
   if (fr.ac) row.ac = fr.ac;
   if (fr.qual) row.qual = fr.qual;
-  const changed = created || snapshot !== JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual]);
+  // 심사기록부에서 지식+기량 세트임이 새로 확인되면, 이미 만들어져 있던 계획/결과 행에도 반영해서
+  // 국토부 제출용 내보내기(exportKrionSubmission)가 지식 행을 빠뜨리지 않도록 한다.
+  if (fr.process === '지식+기량') {
+    row.process = '지식+기량';
+    row.dateKnow = fr.dateKnow || fr.date;
+    row.dateSkill = fr.dateSkill || fr.date;
+  }
+  // 지식심사일이 기량심사일과 다르면 심사관도 다를 수 있으므로 참고용으로 별도 보관 (row.examiner는 기량 심사관 그대로 유지)
+  if (fr.knowExaminer) row.knowExaminer = fr.knowExaminer;
+  const changed = created || snapshot !== JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual, row.process, row.dateKnow, row.dateSkill, row.knowExaminer]);
   if (!changed) return false;
   row.resultSource = 'flyco';
   row.resultSourceFile = fr.filename || '';
@@ -5687,14 +5843,21 @@ function renderFlyco() {
         return `<tr style="${rowStyle}" title="${reviewTip}">
         <td>${r.ac?acDot(r.ac):'—'}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td>${r.type || '<span class="badge-tag tag-fail" style="font-size:9px;padding:1px 5px" title="PDF에서 심사종류를 인식하지 못했어요 - 수정 버튼으로 직접 선택해주세요">⛔ 미인식</span>'}</td>
+        <td>${r.type
+          ? (['정기','인정','LIP임무수행능력검증'].includes(r.type) && r.process==='기량'
+              ? `${r.type} <span style="color:var(--fail);font-size:9px" title="${(r.note||'').replace(/"/g,'&quot;')}">⚠지식누락</span>`
+              : r.type)
+          : `<span class="badge-tag tag-fail" style="font-size:9px;padding:1px 5px" title="${(r.note||'PDF에서 심사종류를 인식하지 못했어요 - 수정 버튼으로 직접 선택해주세요').replace(/"/g,'&quot;')}">⛔ 미인식</span>`}</td>
         <td>${r.subtype?`<span style="font-size:11px">${r.subtype}</span>`:'—'}</td>
         <td>${r.qual||'—'}</td>
         <td>${r.empid||'—'}</td>
         <td style="font-weight:600">${r.name||'—'}${r.matchedCrew?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="운항승무원 현황에서 사번으로 확인됨 (이름·자격 자동 교정)"></i>':' <i class="ti ti-help-circle" style="color:var(--hint);font-size:11px" title="운항승무원 현황에 없는 사번 — PDF 값 그대로 사용 중"></i>'}</td>
         <td>${r.date||'—'}</td>
         <td style="line-height:1.3">${scoreDisp}</td>
-        <td class="center"><span class="badge-tag ${resCls}">${r.result||'—'}</span></td>
+        <td class="center">
+          <span class="badge-tag ${resCls}">${r.result||'—'}</span>
+          ${r.knowResult ? `<div style="font-size:9px;color:var(--muted);white-space:nowrap;margin-top:2px" title="지식심사는 참고용 — 통계는 기량 1건으로만 집계됨${r.knowExaminer?` · 지식심사 심사관: ${r.knowExaminer}`:''}">지식 ${r.knowResult}${r.knowExaminer?` (${r.knowExaminer})`:''}</div>` : ''}
+        </td>
         <td>${r.examiner||'—'}${r.matchedExaminer
           ? ' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="심사관 관리에서 확인됨 (사번 또는 영문명 매칭)"></i>'
           : ` <span class="badge-tag tag-fail" style="font-size:9px;padding:1px 5px;white-space:nowrap" title="${(r.examinerReviewReason||'심사관 관리에 없음').replace(/"/g,'&quot;')}">⛔ 미등록</span>`
@@ -5822,7 +5985,7 @@ function bindFlycoChartDblclick(chartId, onHit) {
   });
 }
 
-const FLYCO_TYPE_COLORS = {'인정':'rgba(88,101,163,.75)','정기':'rgba(106,155,112,.75)','수시':'rgba(196,140,90,.75)'};
+const FLYCO_TYPE_COLORS = {'인정':'rgba(88,101,163,.75)','정기':'rgba(106,155,112,.75)','수시':'rgba(196,140,90,.75)','LIP임무수행능력검증':'rgba(160,90,140,.75)'};
 
 function drawFlycoCharts() {
   const labels=['1점','2점','3점','4점','5점'];
@@ -6173,6 +6336,7 @@ async function saveFlycoToCloud() {
   try {
     await saveChunkedDoc('flyco', JSON.stringify(flycoDB));
     await saveChunkedDoc('flycoFiles', JSON.stringify(flycoFiles));
+    await saveChunkedDoc('pendingknow', JSON.stringify(pendingKnowDB));
   } catch(e) { console.warn('flyco cloud save failed', e); }
 }
 async function loadFlycoFromCloud() {
@@ -6186,6 +6350,11 @@ async function loadFlycoFromCloud() {
     if (filesResult) {
       const parsed = JSON.parse(filesResult.data || '{}');
       flycoFiles = parsed || {};
+    }
+    const pendingResult = await loadChunkedDoc('pendingknow');
+    if (pendingResult) {
+      const parsed = JSON.parse(pendingResult.data || '[]');
+      pendingKnowDB.splice(0, pendingKnowDB.length, ...(parsed||[]));
     }
   } catch(e) { console.warn('flyco cloud load failed', e); }
 }
