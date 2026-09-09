@@ -45,8 +45,23 @@ const CLOUD_COLLECTION = 'selos_admin_data'; // 문서: db, qualm, crew, examine
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+/* 체크박스: 앱 전체 공통 — 브라우저 기본 회색 대신 앱 색상(로즈)으로 통일하고, 마우스를 올리면
+   살짝 커지면서 클릭하기 쉬워지도록(호버 확대) 상시 적용. 개별 요소에 inline style로 크기를 따로
+   준 곳(예: 좁은 헤더 체크박스)은 그 값이 우선 적용되고, 이 규칙의 색상·호버 확대 효과는 그대로 유지된다. */
+input[type="checkbox"]{
+  width:14px;height:14px;cursor:pointer;accent-color:var(--rg);
+  vertical-align:middle;transition:transform .12s ease;
+}
+input[type="checkbox"]:hover{transform:scale(1.35)}
+input[type="checkbox"]:focus-visible{outline:2px solid var(--rg2);outline-offset:1px}
 /* 확대는 사이드바를 제외한 우측 콘텐츠 영역(.main-content)에만 적용 — 사이드바는 아예 손대지 않아 원래 크기/레이아웃 그대로 유지됨 */
 .main-content{zoom:1.15}
+/* 심사계획·심사결과 관리·심사결과분석은 표를 더 크게(글자 키움) 보여주기 위해, 확대를 줄이는 대신
+   심사종류+세부구분을 한 칸으로 합쳐 컬럼 수 자체를 줄이는 방식으로 폭을 확보한다(아래 typeSubtypeDisp
+   참고). 그래서 이 3페이지엔 별도의 확대 축소가 필요 없다 — 나머지 페이지와 동일한 zoom을 그대로 쓴다.
+   대신 이 3페이지 표 글자 크기만 sitewide 기본보다 한 단계 더 키운다. */
+#page-plan .tbl, #page-result .tbl, #page-flyco .tbl{font-size:13.5px}
+#page-plan .tbl th, #page-result .tbl th, #page-flyco .tbl th{font-size:11.5px}
 #page-stat{zoom:0.8696} /* 통계 페이지는 기존 크기 유지 — 차트 4개가 스크롤 없이 한 화면에 보이도록 */
 #page-flyco{zoom:0.8696} /* 심사결과분석도 동일 — 점수분포 차트가 가로 스크롤 없이 한 화면에 보이도록 */
 
@@ -226,14 +241,20 @@ html,body{height:100%;font-family:'Noto Sans KR','맑은 고딕','Malgun Gothic'
 .table-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
 .table-title{font-size:12px;font-weight:700;color:var(--navy)}
 .tbl{width:100%;border-collapse:collapse;font-size:12px}
-.tbl th{background:#FAFAF8;font-size:10.5px;font-weight:700;color:var(--muted);padding:7px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl th{background:#FAFAF8;font-size:10.5px;font-weight:700;color:var(--muted);padding:6px 7px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
 .tbl th.sortable{cursor:pointer;user-select:none}
 .tbl th.sortable:hover{color:var(--rg)}
 .tbl th.sort-active{color:var(--rg)}
 
-.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;white-space:nowrap}
+.tbl td{padding:6px 7px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;white-space:nowrap}
 /* 표 안 글자는 절대 줄바꿈하지 않음. 화면이 좁으면 표 자체가 가로 스크롤됨 */
 .tbl td .filter-input,.tbl td .filter-select{max-width:100%}
+/* 표 안의 작은 아이콘 버튼(수정/삭제 등)과 결과 선택 드롭다운도 체크박스와 같은 방식으로
+   마우스를 올리면 살짝 커지면서 클릭하기 쉬워지도록 — 앱 전체 표에 공통 적용 */
+.tbl td .btn-sm{transition:transform .12s ease}
+.tbl td .btn-sm:hover{transform:scale(1.18)}
+.tbl td select.result-select{transition:transform .12s ease}
+.tbl td select.result-select:hover{transform:scale(1.08)}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:#FAF8F6}
 .tbl td.center,.tbl th.center{text-align:center}
@@ -662,6 +683,12 @@ select{font-family:inherit}
             <button class="tab-btn qsl-btn" onclick="setQualmSL('SIM')">SIM</button>
           </div>
           <span style="font-size:10px;color:var(--muted)">· LINE = 최초 심사월 기준 매년 1회 · SIM = 최초 심사월 + 6개월, 연 2회 · 적격기간은 해당월+다음달(12월은 11·12월)</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:16px;padding:8px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+            <span style="font-size:11px;font-weight:700;color:var(--muted)">행 색상 안내</span>
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="width:16px;height:16px;border-radius:4px;background:#FEF0EE;border:1px solid #E8BCBC;display:inline-block"></span>만료됨</span>
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="width:16px;height:16px;border-radius:4px;background:#FEF8EC;border:1px solid #E8D8A8;display:inline-block"></span>만료임박</span>
+            <span style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="width:16px;height:16px;border-radius:4px;background:var(--surface);border:1px solid var(--border);display:inline-block"></span>정상</span>
+          </div>
         </div>
         <div class="filter-bar">
           <div class="filter-item"><span class="filter-label">기종</span>
@@ -769,11 +796,10 @@ select{font-family:inherit}
           </div>
           <table class="tbl">
             <thead><tr>
-              <th class="center"><input type="checkbox" id="plan-select-all" onchange="togglePlanSelectAll(this)"></th>
-              <th>No</th>
+              <th class="center" style="width:24px;padding-left:5px;padding-right:5px"><input type="checkbox" id="plan-select-all" onchange="togglePlanSelectAll(this)"></th>
+              <th style="width:26px">No</th>
               <th class="sortable" ondblclick="togglePlanSort('simline')">SIM/LINE</th>
               <th class="sortable" ondblclick="togglePlanSort('type')">심사종류</th>
-              <th>세부구분</th>
               <th class="sortable" ondblclick="togglePlanSort('process')">과정</th>
               <th class="sortable" ondblclick="togglePlanSort('ac')">기종</th>
               <th class="sortable" ondblclick="togglePlanSort('qual')">자격</th>
@@ -889,7 +915,6 @@ select{font-family:inherit}
               <th>No</th>
               <th class="sortable" ondblclick="toggleResultSort('simline')">SIM/LINE</th>
               <th class="sortable" ondblclick="toggleResultSort('type')">심사종류</th>
-              <th>세부구분</th>
               <th>과정</th>
               <th class="sortable" ondblclick="toggleResultSort('ac')">기종</th>
               <th class="sortable" ondblclick="toggleResultSort('qual')">자격</th>
@@ -1209,6 +1234,7 @@ select{font-family:inherit}
               <option value="전체">전체</option><option>합격</option><option>불합격</option>
             </select>
           </div>
+          <div class="filter-item"><input class="filter-input" id="flyco-search-name" placeholder="이름 검색" style="width:90px" oninput="renderFlyco()"></div>
           <div class="filter-actions" style="margin-left:auto">
             <button class="btn btn-outline btn-sm" onclick="resetFlycoFilter()">초기화</button>
             <button class="btn btn-outline btn-sm" style="color:var(--line);border-color:#C8D5E4" onclick="reprocessStoredFlycoFiles()" title="재업로드 없이, 이미 저장돼 있는 원본 PDF들을 통째로 다시 파싱해서 지식/기량 짝짓기를 재시도합니다"><i class="ti ti-refresh"></i> 저장된 파일로 재인식</button>
@@ -1227,7 +1253,7 @@ select{font-family:inherit}
           <div id="flyco-qual-summary" style="font-size:11.5px;color:var(--text);font-weight:600;padding:8px 14px;background:var(--bg);border-bottom:1px solid var(--border)"></div>
           <table class="tbl">
             <thead><tr>
-              <th>기종</th><th>SIM/LINE</th><th>심사종류</th><th>세부구분</th><th>자격</th>
+              <th>기종</th><th>SIM/LINE</th><th>심사종류</th><th>자격</th>
               <th>사번</th><th>이름</th><th>심사일</th><th>총점</th><th class="center">결과</th>
               <th>심사관</th><th class="center">작업</th>
             </tr></thead>
@@ -1833,6 +1859,21 @@ function subtypeDisp(r) {
   if (r.subtype) return r.subtype;
   if (typeof SUBTYPE_MAP!=='undefined' && SUBTYPE_MAP[r.type] && SUBTYPE_MAP[r.type].subs.length===0) return r.type;
   return '—';
+}
+// 심사종류+세부구분 병합 표시 — 정기/수시 등은 세부구분이 심사종류와 항상 같은 문자열이라 두 칸에
+// 같은 말이 반복돼서 자리만 차지했다. 같으면 한 번만, 다르면(인정의 최초_초기/전환 등) "인정(전환)"
+// 식으로 괄호로 붙여서 한 칸에 보여준다 — 심사계획/결과 관리·심사결과분석 표의 컬럼 수를 줄여서
+// 글자 크기를 키울 여백을 확보하기 위함.
+function typeSubtypeDisp(r) {
+  const sub = subtypeDisp(r);
+  if (!r.type) return '—';
+  return (sub && sub !== r.type && sub !== '—') ? `${r.type}<span style="color:var(--muted)">(${sub})</span>` : r.type;
+}
+// 위와 같은 조합이지만 심사종류를 색깔 배지(typeTagHtml)로 감싼 버전 — 표에서 배지 스타일을 쓰는 곳용
+function typeBadgeWithSubtype(r) {
+  const sub = subtypeDisp(r);
+  const suffix = (sub && sub !== r.type && sub !== '—') ? ` <span style="font-size:10px;color:var(--muted)">(${sub})</span>` : '';
+  return `${typeTagHtml(r.type)}${suffix}`;
 }
 function examinerDisp(r) {
   if (r.knowExaminer && r.knowExaminer !== r.examiner) {
@@ -2686,7 +2727,7 @@ function renderResult() {
   const setColorMap = {};
   rows.forEach(r=>{ if (r.setId && !(r.setId in setColorMap)) setColorMap[r.setId] = SET_BADGE_COLORS[Object.keys(setColorMap).length % SET_BADGE_COLORS.length]; });
   $('result-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="15" class="empty-state">해당 조건의 데이터가 없습니다 (${ry}년 ${rm}월)</td></tr>`
+    ? `<tr><td colspan="14" class="empty-state">해당 조건의 데이터가 없습니다 (${ry}년 ${rm}월)</td></tr>`
     : rows.map((r,i)=>{
         const resCls=r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
         const setBadge=r.setId?`<span class="set-badge" style="font-size:7px;width:13px;height:13px;background:${setColorMap[r.setId]};border-color:${setColorMap[r.setId]}" title="SET 심사 (피심사자 2명 동반) — 같은 색 배지가 세션 짝이에요">S</span> `:'';
@@ -2696,8 +2737,7 @@ function renderResult() {
         return `<tr style="cursor:default${notYet?';opacity:.72':''}">
           <td>${i+1}</td>
           <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-          <td>${typeTagHtml(r.type)}</td>
-          <td>${subtypeDisp(r)}</td>
+          <td>${typeBadgeWithSubtype(r)}</td>
           <td style="font-size:10px;line-height:1.4">${getProcessDisp(r)}</td>
           <td>${acDot(r.ac||'—')}</td><td>${r.qual||'—'}</td>
           <td>${r.empid||'—'}</td><td>${setBadge}${r.name}</td><td>${planDateDisp(r)}</td>
@@ -2707,7 +2747,7 @@ function renderResult() {
             ? `<span class="badge-tag tag-pend" title="시행 예정 (${doneDate})">시행 전</span>`
             : `<span class="badge-tag ${resCls}">${r.result||'미입력'}</span>${r.resultSource==='flyco'?` <i class="ti ti-file-check" style="color:var(--line);font-size:11px" title="심사결과분석(심사기록부 PDF)에서 자동 반영됨"></i>`:''}`}</td>
           <td class="center">
-            <select class="filter-select" style="font-size:10px;padding:1px 2px;width:68px;border-radius:4px"
+            <select class="filter-select result-select" style="font-size:10px;padding:1px 2px;width:68px;border-radius:4px"
               ${notYet?`disabled title="심사 시행일(${doneDate}) 이후에 입력할 수 있어요"`:''}
               onchange="updateResult(${r.id},this.value,this)">
               <option value="" ${!r.result?'selected':''}>미입력</option>
@@ -3065,6 +3105,16 @@ function renderExaminer() {
     (!kwEmpid||(r.empid||'').toLowerCase().includes(kwEmpid)) &&
     (!kwName ||(r.name ||'').toLowerCase().includes(kwName))
   );
+  // 정렬: ① 심사관 구분(사내 위촉심사관 → 국토교통부 심사관 → CAE 심사관) ② 그 안에서는 위촉기간 오름차순
+  const EXAMINER_TYPE_ORDER = ['사내 위촉심사관','국토교통부 심사관','CAE 심사관'];
+  rows.sort((a,b)=>{
+    const ta = EXAMINER_TYPE_ORDER.indexOf(a.type), tb = EXAMINER_TYPE_ORDER.indexOf(b.type);
+    const oa = ta===-1?EXAMINER_TYPE_ORDER.length:ta, ob = tb===-1?EXAMINER_TYPE_ORDER.length:tb;
+    if (oa !== ob) return oa - ob;
+    const pa = (a.period||'').split('~')[0]?.trim() || '';
+    const pb = (b.period||'').split('~')[0]?.trim() || '';
+    return pa.localeCompare(pb);
+  });
   $('examiner-tbody').innerHTML=rows.length===0
     ?`<tr><td colspan="13" class="empty-state">해당 조건의 심사관이 없습니다</td></tr>`
     :rows.map((r,i)=>{
@@ -5258,11 +5308,11 @@ function fileToDataURL(file) {
 
 // CHECK-TYPE(INITIAL/UPGRADE/TRANSITION/RECURRENT/REQUALIFICATION) → 심사종류/세부구분 매핑
 function mapCheckTypeToSubtype(t) {
-  const s=(t||'').toUpperCase();
+  const s=(t||'').toUpperCase().replace(/-/g,'');
   if (s.includes('INITIAL')) return {type:'인정', subtype:'최초_초기'};
   if (s.includes('UPGRADE')) return {type:'인정', subtype:'승격'};
   if (s.includes('TRANSITION')) return {type:'인정', subtype:'전환'};
-  if (s.includes('REQUALIFICATION')) return {type:'인정', subtype:'재자격'};
+  if (s.includes('REQUALIF')) return {type:'인정', subtype:'재자격'};
   if (s.includes('RECURRENT')) return {type:'정기', subtype:'정기'};
   return {type:'', subtype:''};
 }
@@ -5334,16 +5384,24 @@ function parseFlycoText(text, filename) {
       /Low\s*Visibility\s*Operations|\bLVO\b|EDTO/i.test(titleLine) ||
       /CAT\s*(?:II|2)\s*\/?\s*(?:III|3)?/i.test(titleLine)
     );
-    const isOfficial = /운\s*항\s*자\s*격\s*심\s*사\s*표|기량심사표/i.test(block);
+    const isOfficial = /운\s*항\s*자\s*격\s*심\s*사\s*표|기량심사표|지식심사표/i.test(block);
+    // 국토교통부 "지식심사표"는 위 isKnowledge 정규식엔 안 걸리지만(다른 서식이라) 지식심사인 건 맞다.
+    // isKnowledge 자체를 true로 만들면 결과 판정 로직이 "Total Grade/Overall Grade"를 찾는 잘못된
+    // 분기로 빠져버려서(이 서식엔 그 필드가 없음), process 판정에만 별도로 반영한다.
+    const isOfficialKnowledge = /지식심사표/i.test(block);
+    // (A330) Requalification Evaluation 서식 — SIM 재자격심사 체크라이드. 제목에 FFS/SIM 키워드가
+    // 없고 본문 섹션이 "1. RKSI-RJFF"처럼 노선 구간으로 나뉘어 있어 LINE처럼 보이지만, 실제로는
+    // 풀비행 시뮬레이터에서 노선을 재현하는 세션이라 SIM으로 분류한다.
+    const isRequalEval = /Requalification Evaluation/i.test(titleLine) && !isKnowledge;
     // LIP/SIP(Line/Sim Instructor Pilot) 임무수행능력검증 — 교관 인정심사 체크폼. 제목에 FFS/LINE 키워드가 없어 별도 인식 필요
     //   "LIP/SIP" 서식과 "(A330) LIP VALIDATION SHEET" 서식 둘 다 인식 (필드 라벨이 서로 다름 — 아래 개별 처리)
     const isLip = (/LIP\s*\/\s*SIP|\bLIP\/SIP\b/i.test(titleLine) || /LIP\s*VALIDATION(?:\s*SHEET)?/i.test(titleLine)) && !isKnowledge;
-    if (!isKnowledge && !isTrinityLine && !isTrinitySim && !isTrinitySpecial && !isOfficial && !isLip) return; // 인식 안 되는 블록은 무시
+    if (!isKnowledge && !isTrinityLine && !isTrinitySim && !isTrinitySpecial && !isOfficial && !isLip && !isRequalEval) return; // 인식 안 되는 블록은 무시
 
     const rec = {
       id: 'flyco_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
       filename, source: isOfficial?'국토부서식':'Trinity',
-      process: isKnowledge?'지식':'기량',
+      process: (isKnowledge || isOfficialKnowledge) ?'지식':'기량',
       ac:'', simline:'', type:'', subtype:'', qual:'', empid:'', name:'',
       date:'', score:'', result:'', examiner:'', flight:'', note:'', needsReview:false,
       itemDist: null, itemTotal: 0
@@ -5367,6 +5425,7 @@ function parseFlycoText(text, filename) {
     else if (isTrinitySpecial) rec.simline = /FFS|SIM/i.test(block) ? 'SIM' : 'LINE';
     else if (isOfficial) rec.simline = /SIM/i.test(block) && !/고정익항공기/.test(block) ? 'SIM' : 'LINE';
     else if (isLip) rec.simline = /SIM|SIP/i.test(titleLine) ? 'SIM' : 'LINE';
+    else if (isRequalEval) rec.simline = 'SIM';
 
     // 자격: Trainee Role / 국토부 체크박스(■ CAP,F/O) / Duty code / 제목의 <CAPT> 표기
     const roleM = block.match(/Trainee Role\s+(훈련기장|훈련부기장|기장|부기장)/) || block.match(/■\s*(CAP|F\/O)/);
@@ -5374,9 +5433,14 @@ function parseFlycoText(text, filename) {
     //   깎여 나갔었음(같은 문서의 기량 체크는 Duty code(TF/TC)로 훈련기/부기장을 제대로 잡는데,
     //   지식 체크만 Trainee Role 표기를 써서 값이 서로 달라지는 원인이었음) — 원문 값을 그대로 사용하도록 수정
     if (roleM) rec.qual = roleM[1]==='CAP' ? '기장' : roleM[1]==='F/O' ? '부기장' : roleM[1];
-    if (!rec.qual) { const dutyM = block.match(/Duty code\s+(\w+)/); if (dutyM) rec.qual = dutyCodeToQual(dutyM[1]); }
+    if (!rec.qual) { const dutyM = block.match(/Duty [Cc]ode\s+(\w+)/); if (dutyM) rec.qual = dutyCodeToQual(dutyM[1]); }
     if (!rec.qual && /<CAPT>/i.test(titleLine)) rec.qual='기장';
     if (!rec.qual && /<F\/O>/i.test(titleLine)) rec.qual='부기장';
+    // 국토부 "위촉심사관 지식심사표"/"위촉심사관 기량심사표"는 Duty code·Trainee Role이 아예 없고
+    // 제목/문서명 자체에 "위촉심사관"이라고 명시되어 있다 — LINE/SIM 구분은 이 블록의 simline으로.
+    if (!rec.qual && isOfficial && /위촉심사관/i.test(titleLine)) {
+      rec.qual = rec.simline==='SIM' ? 'SIM위촉심사관' : 'LINE위촉심사관';
+    }
     // ⚠ "Trainee Role 비행교관(LIP)"는 LIP임무수행능력검증(교관의 정기 능력검증)이 아니라,
     //   LIP가 되기 위해 처음 받는 "인정심사(최초_초기)"다 — 서식이 일반 KNOWLEDGE/LINE 그대로라
     //   CHECK-TYPE이 "OTHERS"로 찍혀서 아래 심사종류 추론에 안 걸리고, Trainee Role도 "비행교관(LIP)"
@@ -5434,8 +5498,19 @@ function parseFlycoText(text, filename) {
       rec.specialInstructorQual = (sipHit && !lipHit) ? 'SIM교관' : (lipHit && !sipHit) ? '비행교관' : (rec.simline==='SIM' ? 'SIM교관' : '비행교관');
       rec.qual = rec.specialInstructorQual;
     }
-    const typeM = block.match(/CHECK\s*-\s*TYPE\s+(INITIAL|UPGRADE|TRANSITION|RECURRENT|REQUALIFICATION)/i);
+    // 국토부 서식(지식/기량심사표)은 CHECK-TYPE 필드 대신 체크박스(■)로 종류를 표시한다.
+    if (!rec.type && isOfficial) {
+      if (/■\s*Recurrent/i.test(block)) { rec.type='정기'; rec.subtype='정기'; }
+      else if (/■\s*Requalification/i.test(block)) { rec.type='인정'; rec.subtype='재자격'; }
+      else if (/■\s*Initial/i.test(block)) { rec.type='인정'; rec.subtype='최초_초기'; }
+    }
+    const typeM = block.match(/CHECK\s*-\s*TYPE\s+(INITIAL|UPGRADE|TRANSITION|RECURRENT|RE-?QUALIF(?:ICATION)?)/i);
     if (!rec.type && typeM) { const m=mapCheckTypeToSubtype(typeM[1]); rec.type=m.type; rec.subtype=m.subtype; }
+    // (A330) Requalification Evaluation 서식은 CHECK-TYPE 필드가 없고 "Training Type RQC"로만
+    // 표시된다 — RQC(Re-Qualification Course)를 재자격으로 매핑한다.
+    if (!rec.type && isRequalEval && (/\bRQC\b/i.test(trainTypeVal) || /Training Type\s+RQC\b/i.test(block))) {
+      rec.type = '인정'; rec.subtype = '재자격';
+    }
 
     const titleKeywords = titleLine.match(/Initial|Transition|Upgrade|Requalification|Recurrent/gi) || [];
     const uniqTitleKw = [...new Set(titleKeywords.map(k=>k.toLowerCase()))];
@@ -5461,7 +5536,9 @@ function parseFlycoText(text, filename) {
       if (pilotM) { rec.name = pilotM[1].trim().replace(/\s+/g,' '); rec.empid = pilotM[2]||''; }
     }
     if (!rec.name) {
-      const nameM = block.match(/Name of Pilot\s+([^\n]+?)\s+(?:Flight No|$)/);
+      // "Name of Pilot 조중민 Date" — 국토부 서식(사번 없이 한글 이름만). "Flight No"가 없는
+      // 서식도 있어 그 자리에 "Date"도 종료 지점으로 함께 허용한다.
+      const nameM = block.match(/Name of Pilot\s+([^\n]+?)\s+(?:Flight No|Date|$)/);
       if (nameM) rec.name = nameM[1].trim();
     }
     if (!rec.name) {
@@ -5495,10 +5572,20 @@ function parseFlycoText(text, filename) {
       } else {
         // CAE 심사관 등 외주 심사관은 Trinity 사번(T######)이 없어 위 패턴에 안 걸림 → ID 없이 이름만 캡처
         const examinerNoId = block.match(/INSTRUCTOR SIGNATURE[\s\S]{0,90}?([A-Z][A-Z .]{2,40}?)\s*(?:\n|\s{2,}|$)/);
-        const officialM = block.match(/Checker'?s name\s+([^\n]+)/);
+        // ⚠ "Checker's name" 라벨 바로 뒤에 값이 오지 않는 경우가 있다 — PDF가 표를 열(칼럼) 단위로
+        //   읽어서 "Checker's name" 다음 줄에 옆 칸의 "■ Satisfactory" 체크박스 문구가 먼저 나오고,
+        //   실제 이름("윤동섭")은 몇 줄 더 뒤에야 나오는 순서 뒤섞임이 실제로 있었다(라벨 바로 뒤
+        //   텍스트를 이름으로 오인해서 "■ Satisfactory"가 심사관으로 잘못 들어간 사고). 라벨 뒤로
+        //   순수 한글 이름(2~5자)만 있는 줄을 찾을 때까지 건너뛰며 찾는 방식으로 바꿨다.
+        const checkerIdx = block.search(/Checker'?s name/i);
+        let officialName = null;
+        if (checkerIdx !== -1) {
+          const afterLines = block.slice(checkerIdx).split('\n').map(l=>l.trim());
+          officialName = afterLines.find(l=>/^[가-힣]{2,5}$/.test(l)) || null;
+        }
         // "(A330) LIP VALIDATION SHEET" 서식: "Instructor name 김동욱" (한글 이름, 사번 없음)
         const instructorNameM = block.match(/Instructor name\s+([^\n]+?)\s*(?:\n|LIP SIGNATURE|$)/i);
-        if (officialM && isPlausibleExaminerName(officialM[1])) rec.examiner = officialM[1].trim();
+        if (officialName) rec.examiner = officialName;
         else if (instructorNameM && isPlausibleExaminerName(instructorNameM[1])) rec.examiner = instructorNameM[1].trim();
         else if (examinerNoId && isPlausibleExaminerName(examinerNoId[1])) rec.examiner = examinerNoId[1].trim();
         else { rec.examinerFailed = true; rec.note = (rec.note?rec.note+' / ':'')+'⚠ 심사관 자동인식 실패 - PDF 확인 후 직접 입력 필요'; }
@@ -5898,6 +5985,7 @@ async function processFlycoFiles(fileList) {
 
 function resetFlycoFilter() {
   ['flyco-ac','flyco-simline','flyco-type','flyco-qual','flyco-result'].forEach(id=>{ if($(id)) $(id).value='전체'; });
+  if ($('flyco-search-name')) $('flyco-search-name').value = '';
   renderFlyco();
 }
 function clearFlycoAll() {
@@ -6195,11 +6283,13 @@ function renderFlyco() {
   const typeF = $('flyco-type')?.value||'전체';
   const qualF = $('flyco-qual')?.value||'전체';
   const resultF = $('flyco-result')?.value||'전체';
+  const nameKw = ($('flyco-search-name')?.value||'').trim().toLowerCase();
   const inPeriod = flycoRowsInPeriod();
   const rows = inPeriod.filter(r=>
     (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) &&
     (typeF==='전체'||r.type===typeF) && (qualF==='전체'||r.qual===qualF) &&
-    (resultF==='전체'||r.result===resultF)
+    (resultF==='전체'||r.result===resultF) &&
+    (!nameKw || (r.name||'').toLowerCase().includes(nameKw))
   ).sort(examRowSortCompare);
 
   $('flyco-val-total').textContent = inPeriod.length;
@@ -6224,9 +6314,19 @@ function renderFlyco() {
   }
 
   $('flyco-tbody').innerHTML = rows.length===0
-    ? `<tr><td colspan="12" class="empty-state">업로드된 심사기록이 없습니다. 위에서 PDF를 올려주세요.</td></tr>`
+    ? `<tr><td colspan="11" class="empty-state">업로드된 심사기록이 없습니다. 위에서 PDF를 올려주세요.</td></tr>`
     : rows.map(r=>{
         const resCls = r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
+        // ⚠ r.needsReview는 업로드 시점에 한 번 계산된 값이라, 그 뒤에 재매칭 등으로 type/process가
+        //   바뀌면(예: 지식이 뒤늦게 붙어서 "⚠지식누락"이 해소됨) 값이 오래되어 배지와 음영이
+        //   서로 안 맞는 경우가 있었다 — 배지는 매번 새로 계산하는데 음영은 옛날 값을 쓰고 있었음.
+        //   렌더할 때마다 여기서 다시 계산해서 항상 같은 기준으로 맞춘다.
+        r.needsReview = !r.ac || !r.name || !r.date || !r.result || !!r.examinerFailed || !r.type
+          || (r.source==='Trinity' && r.process!=='지식' && r.type!=='LIP임무수행능력검증' && !r.score)
+          || (r.type==='인정' && !r.subtype)
+          || (['정기','인정'].includes(r.type) && r.process==='기량')
+          || !!r.examinerReviewReason || !!r.subtypeInvalid
+          || (r.matchedCrew===false && /^[A-Z .]+$/.test((r.name||'').trim()));
         const rowStyle = r.needsReview ? 'background:#FEF8EC' : '';
         const scoreDisp = r.score
           ? `<b>${r.score}${r.source==='Trinity'?'점':''}</b>` + (r.itemDist ? `<div style="font-size:9px;color:var(--muted);white-space:nowrap">1점${r.itemDist[1]}·2점${r.itemDist[2]}·3점${r.itemDist[3]}·4점${r.itemDist[4]}·5점${r.itemDist[5]} (${r.itemTotal}개항목)</div>` : '')
@@ -6238,9 +6338,8 @@ function renderFlyco() {
         <td>${r.type
           ? (['정기','인정'].includes(r.type) && r.process==='기량'
               ? `${r.type} <span style="color:var(--fail);font-size:9px" title="${(r.note||'').replace(/"/g,'&quot;')}">⚠지식누락</span>`
-              : r.type)
+              : typeSubtypeDisp(r))
           : `<span class="badge-tag tag-fail" style="font-size:9px;padding:1px 5px" title="${(r.note||'PDF에서 심사종류를 인식하지 못했어요 - 수정 버튼으로 직접 선택해주세요').replace(/"/g,'&quot;')}">⛔ 미인식</span>`}</td>
-        <td><span style="font-size:11px">${subtypeDisp(r)}</span></td>
         <td>${r.qual||'—'}</td>
         <td>${r.empid||'—'}</td>
         <td style="font-weight:600">${r.name||'—'}${r.matchedCrew?' <i class="ti ti-circle-check" style="color:var(--pass);font-size:11px" title="운항승무원 현황에서 사번으로 확인됨 (이름·자격 자동 교정)"></i>':' <i class="ti ti-help-circle" style="color:var(--hint);font-size:11px" title="운항승무원 현황에 없는 사번 — PDF 값 그대로 사용 중"></i>'}</td>
@@ -7466,15 +7565,14 @@ renderPlan = function() {
   rows.forEach(r=>{ if (r.setId && !(r.setId in setColorMap)) setColorMap[r.setId] = SET_BADGE_COLORS[Object.keys(setColorMap).length % SET_BADGE_COLORS.length]; });
   const tbody = $('plan-tbody');
   tbody.innerHTML = rows.length===0
-    ? `<tr><td colspan="17" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
+    ? `<tr><td colspan="16" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
     : rows.map((r,i)=>{
         const processDisp = getProcessDisp(r);
         return `<tr>
         <td class="center"><input type="checkbox" class="plan-row-check" data-id="${r.id}" ${planSelectedIds.has(r.id)?'checked':''} onchange="togglePlanRowSelect(${r.id},this.checked)"></td>
         <td>${i+1}</td>
         <td><span class="badge-tag ${r.simline==='SIM'?'tag-sim':'tag-line'}">${r.simline}</span></td>
-        <td>${typeTagHtml(r.type)}</td>
-        <td>${subtypeDisp(r)}</td>
+        <td>${typeBadgeWithSubtype(r)}</td>
         <td style="font-size:10px;line-height:1.4">${processDisp}</td>
         <td>${acDot(r.ac)}</td><td>${r.qual}</td>
         <td>${r.empid}</td><td>${r.setId?`<span class="set-badge" style="font-size:7px;width:13px;height:13px;background:${setColorMap[r.setId]};border-color:${setColorMap[r.setId]}" title="SET 심사 (피심사자 2명 동반) — 같은 색 배지가 세션 짝이에요">S</span> `:''}${r.name}</td><td>${planDateDisp(r)}</td><td>${normalizeFlightRoute(r.flight)}</td>
