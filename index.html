@@ -4629,7 +4629,14 @@ function editPlanRow(id) {
   }
   $('fm-flight').value = (row.flight&&row.flight!=='—')?row.flight:'';
   $('fm-examiner').value = (row.examiner&&row.examiner!=='—')?row.examiner:'';
-  $('fm-place').value = (row.place&&row.place!=='—')?row.place:'';
+  // ⚠ 예전엔 심사장소가 비어있으면("—" 등) 그냥 빈칸으로 두고, "사용자가 일부러 비워둔 값"으로
+  // 취급해서 자동완성을 안 걸었다 — 그래서 심사결과분석 자동 반영 초기에 생겼던 빈 심사장소가
+  // 수정 모달을 열어도 계속 빈 채로 남아있었다. 지금은 비어있으면 여기서도 바로 채워서 보여준다
+  // (SIM=CAE KOR, LINE=편명/구간에서 공항 2개) — 물론 그래도 사용자가 원하면 바로 고칠 수 있다.
+  const rowHasPlace = row.place && row.place!=='—';
+  $('fm-place').value = rowHasPlace ? row.place
+    : (row.simline==='SIM' ? (typeof DEFAULT_SIM_PLACE!=='undefined'?DEFAULT_SIM_PLACE:'CAE KOR')
+       : ((typeof deriveAirportsFromRoute==='function' ? deriveAirportsFromRoute(row.flight) : '') || (row.flight&&row.flight!=='—'?row.flight:'') || ''));
   if($('fm-place-know'))  $('fm-place-know').value  = row.placeKnow||'';
   if($('fm-place-skill')) $('fm-place-skill').value = row.placeSkill||'';
   // 이 행의 실제 심사과정(row.process) 기준으로 지식/기량 필드 보이기·숨기기를 다시 맞춘다.
@@ -6343,13 +6350,19 @@ function findMatchingPlanRow(fr) {
 function createPlanRowFromFlyco(fr) {
   // 지식+기량 세트면(같은 날이어도) 국토부 제출용 내보내기가 인식할 수 있게 두 날짜를 항상 채워둔다.
   const isCombined = fr.process === '지식+기량' || (fr.dateKnow && fr.dateSkill && fr.dateKnow !== fr.dateSkill);
+  // ⚠ 심사장소는 예전엔 항상 "—"로 비워둔 채 생성됐다(심사계획 추가 모달에서 수동 입력할 때만
+  // 편명/구간에서 자동으로 채워주는 기능이 있었고, 심사결과분석에서 자동 생성되는 경로엔 이 로직이
+  // 아예 빠져있었음). SIM은 기본 장소(CAE KOR), LINE은 편명/구간에서 공항 2개를 뽑아 채운다.
+  const autoPlace = fr.simline==='SIM'
+    ? (typeof DEFAULT_SIM_PLACE!=='undefined' ? DEFAULT_SIM_PLACE : 'CAE KOR')
+    : (typeof deriveAirportsFromRoute==='function' ? deriveAirportsFromRoute(fr.flight) : '') || (fr.flight&&fr.flight!=='—'?fr.flight:'');
   const row = {
     id: nextId++, simline: fr.simline||'LINE', type: fr.type||'', subtype: fr.subtype||'',
     process: fr.process||'기량', ac: fr.ac||'', qual: fr.qual||'',
     empid: fr.empid||'', name: fr.name||'', date: fr.date,
     dateKnow: isCombined?(fr.dateKnow||fr.date):'', dateSkill: isCombined?(fr.dateSkill||fr.date):'',
     knowExaminer: fr.knowExaminer||'',
-    flight: fr.flight||'—', examiner: fr.examiner||'—', place:'—', note:'', setId:null, result:''
+    flight: fr.flight||'—', examiner: fr.examiner||'—', place: autoPlace||'—', note:'', setId:null, result:''
   };
   DB.push(row);
   return row;
@@ -6366,7 +6379,7 @@ function syncFlycoResultToPlan(fr) {
   // 심사기록부가 항상 우선이므로 결과뿐 아니라 심사관·심사종류·세부구분·기종·자격도 함께 맞춘다.
   // (심사결과분석에서 심사관을 바로잡아도 심사계획/결과 관리에는 반영이 안 되던 문제 수정 —
   //  단, 한글 이름으로 확인된(matchedExaminer) 심사관일 때만 덮어써서 검증 안 된 값이 넘어가지 않게 한다)
-  const snapshot = JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual, row.process, row.dateKnow, row.dateSkill, row.knowExaminer, row.flight]);
+  const snapshot = JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual, row.process, row.dateKnow, row.dateSkill, row.knowExaminer, row.flight, row.place]);
   row.result = fr.result;
   if (fr.matchedExaminer && fr.examiner && fr.examiner!=='—') row.examiner = fr.examiner;
   // 세부구분은 종류와 세트로 함께 맞춘다(비어있어도 덮어씀) — 그래야 심사기록부 쪽에서 잘못된
@@ -6386,7 +6399,13 @@ function syncFlycoResultToPlan(fr) {
   row.knowExaminer = fr.knowExaminer || '';
   // LINE 심사는 심사기록부의 "CHECK - ROUTE" 필드에서 편명/구간을 뽑아온다 (SIM은 구간이 없어 fr.flight가 비어있음)
   if (fr.flight) row.flight = fr.flight;
-  const changed = created || snapshot !== JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual, row.process, row.dateKnow, row.dateSkill, row.knowExaminer, row.flight]);
+  // 심사장소가 아직 비어있으면(예전 버그로 "—"만 있던 행 등) 여기서도 자동으로 채운다.
+  if (!row.place || row.place==='—') {
+    row.place = fr.simline==='SIM'
+      ? (typeof DEFAULT_SIM_PLACE!=='undefined' ? DEFAULT_SIM_PLACE : 'CAE KOR')
+      : ((typeof deriveAirportsFromRoute==='function' ? deriveAirportsFromRoute(fr.flight) : '') || (fr.flight&&fr.flight!=='—'?fr.flight:'') || '—');
+  }
+  const changed = created || snapshot !== JSON.stringify([row.result, row.examiner, row.type, row.subtype, row.ac, row.qual, row.process, row.dateKnow, row.dateSkill, row.knowExaminer, row.flight, row.place]);
   if (!changed) return false;
   row.resultSource = 'flyco';
   row.resultSourceFile = fr.filename || '';
