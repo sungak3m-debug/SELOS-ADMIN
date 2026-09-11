@@ -897,6 +897,9 @@ select{font-family:inherit}
             <button class="btn btn-outline btn-sm" onclick="exportKrionSubmission()" style="color:#5A4080;border-color:#D8CEEC">
               <i class="ti ti-building-bank" style="font-size:12px"></i> 국토부 제출용
             </button>
+            <button class="btn btn-outline btn-sm" onclick="openWebTangoModal()" style="color:#1F6F5C;border-color:#B8DCCF">
+              <i class="ti ti-plane-departure" style="font-size:12px"></i> 웹탱고
+            </button>
           </div>
         </div>
         <div class="big-month-nav">
@@ -1388,6 +1391,35 @@ select{font-family:inherit}
       <button class="btn btn-excel btn-sm" onclick="exportFailDrawerExcel()"><i class="ti ti-file-spreadsheet"></i> 엑셀</button>
       <button class="btn btn-outline btn-sm" onclick="exportFailDrawerPDF()"><i class="ti ti-file-type-pdf"></i> PDF</button>
       <button class="btn btn-outline" onclick="closeDrawer('fail')">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 웹탱고 내보내기 범위 선택 모달 ── -->
+<div class="modal-overlay" id="webtango-modal">
+  <div class="modal-box" style="width:380px">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-plane-departure" style="margin-right:6px"></i>웹탱고 내보내기</span>
+      <button class="modal-close" onclick="closeWebTangoModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:2px;background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:2px;margin-bottom:14px">
+        <button class="tab-btn active" id="webtango-range-all" onclick="setWebTangoRange('all')">전체</button>
+        <button class="tab-btn" id="webtango-range-month" onclick="setWebTangoRange('month')">기간 선택</button>
+      </div>
+      <div id="webtango-month-range" style="display:none">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">시작월</label>
+            <input class="form-control" type="month" id="webtango-from"></div>
+          <div class="form-group"><label class="form-label">종료월</label>
+            <input class="form-control" type="month" id="webtango-to"></div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px">· 현재 심사결과 관리에 걸려있는 기종/SIM·LINE 필터는 그대로 적용돼요 · 결과가 입력된 심사만 대상이에요</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeWebTangoModal()">취소</button>
+      <button class="btn btn-primary" onclick="runWebTangoExport()"><i class="ti ti-file-spreadsheet"></i> 내보내기</button>
     </div>
   </div>
 </div>
@@ -2966,6 +2998,149 @@ async function exportKrionSubmission() {
   if (missingCode.length) {
     alert(`⚠ 총 ${out.length}건 중 ${missingCode.length}건은 심사관코드가 비어있어요.\n심사관 관리 페이지에서 해당 심사관의 "심사관코드"를 입력해두시면 다음부터 자동으로 채워져요.`);
   }
+}
+
+// ── 웹탱고(WebTango) 업로드 양식 자동 생성 ──
+// "심사기록부_양식.xlsx"와 동일한 컬럼 구성으로 내보낸다. 컬럼 의미·작성 규칙은
+// "_운항-심사관리_작성방법_20260706.xlsx" 참고. 핵심 규칙:
+//  · LINE 심사(지식+기량 날짜가 둘 다 있는 경우)는 지식/기량을 별도 두 줄로 쪼갠다.
+//    SIM은 샘플 데이터에 늘 기량 한 줄만 있어서(지식 체크가 있어도) 기량 한 줄만 낸다.
+//  · 심사관이 "사내 위촉심사관"이면 checker_primary(사번)+위촉심사관(K)(한글명)에,
+//    "CAE 심사관"/"국토교통부 심사관"이면 checker_org+checker_name에 각각 넣는다.
+//  · 세부구분(check_type_sub)은 원본 양식 규칙과 달라서 그대로 못 쓴다 — 인정은 실제 세부구분
+//    그대로, 특수는 "_초기"를 붙이고(EDTO_초기/CAT II/III_초기), 나머지(정기·특별·수시 등)는
+//    전부 "기타"로 통일해서 낸다(원본 양식 샘플이 실제로 이런 규칙이었음).
+//  · 자격(check_quali)도 우리 쪽 세분화된 값(LINE위촉심사관/SIM위촉심사관/SIM교관)을
+//    원본 양식이 쓰는 단순한 값(위촉/교관)으로 되돌려서 낸다.
+function webtangoSubtype(r) {
+  if (r.type==='인정') return r.subtype || '기타';
+  if (r.type==='특수') return r.subtype ? `${r.subtype}_초기` : '기타';
+  return '기타'; // 정기·특별·수시·LIP임무수행능력검증 등
+}
+function webtangoQual(q, ac) {
+  const acTag = ac ? `(${ac})` : '';
+  const map = {
+    'LINE위촉심사관': `A/C위촉심사관${acTag}`,
+    'SIM위촉심사관': `SIM위촉심사관${acTag}`,
+    '비행교관': `비행교관${acTag}`,
+    'SIM교관': `SIM교관${acTag}`,
+  };
+  return map[q] || q || '';
+}
+function webtangoExaminerInfo(examinerName) {
+  if (!examinerName || examinerName==='—') return {primary:'', primaryName:'', org:'', name:''};
+  const e = examinerDB.find(x=>x.name===examinerName);
+  if (e && e.type==='사내 위촉심사관') return {primary:e.empid||'', primaryName:e.name, org:'', name:''};
+  if (e && e.type==='CAE 심사관') return {primary:'', primaryName:'', org:'CAE KOR', name:e.name};
+  if (e && e.type==='국토교통부 심사관') return {primary:'', primaryName:'', org:'국토교통부', name:e.name};
+  return {primary:'', primaryName:'', org:'', name:examinerName}; // 심사관 관리에 없는 이름 — 조직 불명, 이름만 기재
+}
+let webtangoRangeMode = 'all';
+function openWebTangoModal() {
+  setWebTangoRange('all');
+  $('webtango-modal').classList.add('open');
+}
+function closeWebTangoModal() { $('webtango-modal').classList.remove('open'); }
+function setWebTangoRange(mode) {
+  webtangoRangeMode = mode;
+  $('webtango-range-all').classList.toggle('active', mode==='all');
+  $('webtango-range-month').classList.toggle('active', mode==='month');
+  $('webtango-month-range').style.display = mode==='month' ? '' : 'none';
+}
+function runWebTangoExport() {
+  let fromYm = '', toYm = '';
+  if (webtangoRangeMode==='month') {
+    fromYm = $('webtango-from')?.value || '';
+    toYm = $('webtango-to')?.value || '';
+    if (!fromYm && !toYm) { alert('시작월 또는 종료월 중 하나 이상 선택해주세요.'); return; }
+    if (fromYm && toYm && fromYm > toYm) { alert('시작월이 종료월보다 늦어요 - 순서를 확인해주세요.'); return; }
+  }
+  closeWebTangoModal();
+  exportWebTango(fromYm, toYm);
+}
+async function exportWebTango(fromYm, toYm) {
+  await ensureXLSXLoaded();
+  // 국토부 제출과 달리 웹탱고는 "지금까지의 전체 데이터"를 한 번에 넘기는 용도라 기본은 월 단위로
+  // 자르지 않는다. 다만 필요하면(예: 이번에 새로 추가된 데이터만) 시작월~종료월로 범위를 좁힐 수 있다.
+  const ac = $('result-ac')?.value||'전체';
+  const sl = $('result-simline')?.value||'전체';
+  const rows = DB.filter(r=>
+    (ac==='전체'||r.ac===ac) && (sl==='전체'||r.simline===sl) && r.result && // 결과 미입력 건은 제외
+    (!fromYm || (r.date||'') >= fromYm) && (!toYm || (r.date||'') <= toYm+'-31')
+  );
+  if (!rows.length) { alert('내보낼 데이터가 없어요 (결과가 입력된 심사만 대상이에요).'); return; }
+  const rangeLabel = (fromYm||toYm) ? `${fromYm||'처음'} ~ ${toYm||'최근'}` : '전체 기간';
+  if (!confirm(`웹탱고 업로드 양식으로 ${rows.length}건을 내보낼까요?\n(${rangeLabel} 기준${ac!=='전체'?`, 기종 ${ac}`:''}${sl!=='전체'?`, ${sl}만`:''})`)) return;
+
+  const headers = ['plan_month','ac_type','check_category','check_type','check_type_sub','check_quali','성명','empnum',
+    'check_seq','quali_code_category','quali_code_group','knowledge_date','skill_date','과정',
+    'checker_primary','위촉심사관(K)','checker_secondary','위촉심사관(H)','checker_org','checker_name',
+    'check_fltid','check_route','심사장소','remark','pass_yn','결과'];
+
+  function baseRow(r) {
+    return {
+      ac_type: r.ac||'', check_category: r.simline||'',
+      check_type: r.type||'', check_type_sub: webtangoSubtype(r),
+      check_quali: webtangoQual(r.qual, r.ac), '성명': r.name||'',
+      empnum: r.empid || '미등록',
+      quali_code_category: 'QUALIFICATION', quali_code_group: 'PERSON_QUALIFICATION',
+      checker_secondary: '', '위촉심사관(H)': '',
+      check_fltid: '', remark: r.note && !/^⚠/.test(r.note) ? r.note : '',
+      pass_yn: r.result==='합격' ? 'Y' : r.result==='불합격' ? 'N' : '',
+      '결과': r.result || ''
+    };
+  }
+  const out = [];
+  rows.forEach(r=>{
+    const base = baseRow(r);
+    // LINE이고 지식/기량 날짜가 둘 다 있으면 두 줄로 쪼갠다. 그 외(SIM 전부, 지식 없는 LINE)는 한 줄.
+    const splitKnowSkill = r.simline==='LINE' && r.dateKnow && r.dateSkill;
+    if (splitKnowSkill) {
+      const kInfo = webtangoExaminerInfo(r.knowExaminer || r.examiner);
+      const place = '지식심사실';
+      out.push({...base,
+        plan_month: (r.dateKnow||'').slice(0,7), knowledge_date:r.dateKnow, skill_date:'', '과정':'지식',
+        checker_primary:kInfo.primary, '위촉심사관(K)':kInfo.primaryName, checker_org:kInfo.org, checker_name:kInfo.name,
+        check_route: place, '심사장소': place
+      });
+      const sInfo = webtangoExaminerInfo(r.examiner);
+      const skillPlace = r.simline==='LINE' ? (r.flight&&r.flight!=='—'?r.flight:(r.place||'')) : (r.place||'');
+      out.push({...base,
+        plan_month: (r.dateSkill||'').slice(0,7), knowledge_date:'', skill_date:r.dateSkill, '과정':'기량',
+        checker_primary:sInfo.primary, '위촉심사관(K)':sInfo.primaryName, checker_org:sInfo.org, checker_name:sInfo.name,
+        check_route: skillPlace, '심사장소': skillPlace
+      });
+    } else {
+      const sInfo = webtangoExaminerInfo(r.examiner);
+      const place = r.simline==='LINE' ? (r.flight&&r.flight!=='—'?r.flight:(r.place||'')) : (r.place||'');
+      out.push({...base,
+        plan_month: (r.date||'').slice(0,7), knowledge_date:'', skill_date:r.date, '과정':'기량',
+        checker_primary:sInfo.primary, '위촉심사관(K)':sInfo.primaryName, checker_org:sInfo.org, checker_name:sInfo.name,
+        check_route: place, '심사장소': place
+      });
+    }
+  });
+
+  // check_seq: plan_month~empnum까지 완전히 동일한 행이 여러 개면 발생순서대로 1,2,3... 부여
+  const seqSeen = {};
+  out.forEach(o=>{
+    const key = [o.plan_month,o.ac_type,o.check_category,o.check_type,o.check_type_sub,o.check_quali,o.empnum,o['과정']].join('|');
+    const total = out.filter(x=>[x.plan_month,x.ac_type,x.check_category,x.check_type,x.check_type_sub,x.check_quali,x.empnum,x['과정']].join('|')===key).length;
+    if (total > 1) { seqSeen[key] = (seqSeen[key]||0) + 1; o.check_seq = seqSeen[key]; }
+    else o.check_seq = '';
+  });
+
+  const today = new Date();
+  const createDate = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  out.forEach(o=>{ o.creator='T240094'; o.create_date=createDate; o.use_yn='True'; });
+  const fullHeaders = headers.concat(['creator','create_date','use_yn']);
+
+  const aoa = [fullHeaders, ...out.map(o=>fullHeaders.map(h=>o[h]!==undefined?o[h]:''))];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  const rangeTag = (fromYm||toYm) ? `${fromYm||'처음'}~${toYm||'최근'}` : '전체기간';
+  XLSX.writeFile(wb, `웹탱고_심사기록부_${rangeTag}_${createDate}.xlsx`);
 }
 
 // ══════════════════════════════════════════════════════════════════
