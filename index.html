@@ -3465,8 +3465,21 @@ async function saveChunkedDoc(baseName, jsonString) {
   const prevMeta = await metaRef.get();
   const prevCount = prevMeta.exists ? (prevMeta.data().chunkCount||0) : 0;
   const savedAt = new Date().toISOString();
+  // ⚠ 조각 하나라도 저장에 실패하면(네트워크 순간 끊김 등) 그 조각만 옛날 내용으로 남은 채
+  // chunkCount는 새 값으로 바뀌어, 다음에 불러올 때 중간이 잘린 깨진 데이터가 되는 사고가 있었다.
+  // 조각마다 최대 2번까지 재시도해서 이런 순간적인 실패를 넘기고, 그래도 실패하면 meta를 아예
+  // 갱신하지 않은 채 에러를 던져서 "일부만 반영된 반쪽짜리 저장"이 되는 걸 막는다.
   for (let i=0;i<chunks.length;i++){
-    await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).set({data: chunks[i]});
+    let lastErr = null;
+    let ok = false;
+    for (let attempt=0; attempt<3 && !ok; attempt++){
+      try {
+        if (attempt>0) await new Promise(res=>setTimeout(res, 500));
+        await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).set({data: chunks[i]});
+        ok = true;
+      } catch(e) { lastErr = e; }
+    }
+    if (!ok) throw new Error(`"${baseName}" 데이터 저장 중 ${i+1}/${chunks.length}번째 조각이 3번 재시도 후에도 실패했어요: ${lastErr?.message||''}`);
   }
   // 이전보다 청크 수가 줄었으면 남는 옛 청크 삭제
   for (let i=chunks.length;i<prevCount;i++){
@@ -3477,6 +3490,11 @@ async function saveChunkedDoc(baseName, jsonString) {
 }
 
 // 청크로 나뉜 문서를 다시 하나의 JSON 문자열로 합쳐서 불러오기
+// ⚠ 예전엔 청크가 하나 빠져있어도(저장 도중 네트워크 문제 등으로 일부만 실패) 조용히 건너뛰고
+//   이어붙여서, 중간이 통째로 잘려나간 깨진 JSON을 그대로 반환했다 — 그러면 나중에 JSON.parse에서
+//   "position 600001" 같은 알아보기 힘든 에러로 터지고, 원인을 전혀 알 수 없었다. 이제 청크가
+//   빠져있으면 몇 번 재시도(일시적 네트워크 문제 대응)하고, 그래도 없으면 어느 청크가 왜 없는지
+//   명확한 에러를 던진다 — 조용히 깨진 데이터를 만들어내는 대신, 문제를 바로 알 수 있게 한다.
 async function loadChunkedDoc(baseName) {
   const metaSnap = await cloudDB.collection(CLOUD_COLLECTION).doc(baseName+'_meta').get();
   if (!metaSnap.exists) return null;
@@ -3484,8 +3502,18 @@ async function loadChunkedDoc(baseName) {
   const savedAt = metaSnap.data().savedAt || null;
   let full = '';
   for (let i=0;i<count;i++){
-    const snap = await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).get();
-    if (snap.exists) full += (snap.data().data||'');
+    let snap = await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).get();
+    if (!snap.exists) {
+      // 일시적인 네트워크 문제일 수 있으니 짧게 간격을 두고 두 번 더 시도해본다
+      for (let retry=0; retry<2 && !snap.exists; retry++) {
+        await new Promise(res=>setTimeout(res, 400));
+        snap = await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).get();
+      }
+    }
+    if (!snap.exists) {
+      throw new Error(`"${baseName}" 데이터의 ${i+1}/${count}번째 조각이 클라우드에 없어요 (전체 데이터가 여러 조각으로 나뉘어 저장되는데, 그중 하나가 저장 중 유실된 것 같아요). 데이터가 부분적으로 깨져있을 수 있으니, 다른 기기/브라우저에서 이 앱을 열어 정상적으로 보이면 그 화면에서 "저장" 버튼을 한 번 눌러 클라우드를 새로 덮어써 주세요.`);
+    }
+    full += (snap.data().data||'');
   }
   return { data: full, savedAt, chunkCount: count };
 }
@@ -3559,7 +3587,12 @@ async function loadFromStorage() {
     return loaded;
   } catch(e) {
     console.warn('cloud load failed', e);
-    alert('⚠️ 클라우드 데이터 로드 실패: ' + e.message + '\n\nFirebase 설정(firebaseConfig)을 확인해주세요.');
+    // 조각 유실처럼 원인이 명확한 에러는 그 메시지만 보여준다 — "Firebase 설정을 확인하세요"라는
+    // 안내를 덧붙이면(예전 방식) 원인이 설정 문제인 것처럼 오해하게 만들어서 더 헷갈릴 수 있다.
+    const isChunkIssue = /번째 조각/.test(e.message||'');
+    alert(isChunkIssue
+      ? '⚠️ 클라우드 데이터 로드 실패\n\n' + e.message
+      : '⚠️ 클라우드 데이터 로드 실패: ' + e.message + '\n\nFirebase 설정(firebaseConfig)을 확인해주세요.');
     return false;
   }
 }
@@ -3591,36 +3624,44 @@ async function loadExaminerFromCloud() {
 function setupRealtimeSync() {
   cloudDB.collection(CLOUD_COLLECTION).doc('db_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const result = await loadChunkedDoc('db');
-    if(!result) return;
-    const parsed = JSON.parse(result.data || '[]');
-    DB.splice(0, DB.length, ...parsed);
-    renderRecord();renderPlan();renderResult();renderCal();
-    calcAndDrawStat('전체');
+    try {
+      const result = await loadChunkedDoc('db');
+      if(!result) return;
+      const parsed = JSON.parse(result.data || '[]');
+      DB.splice(0, DB.length, ...parsed);
+      renderRecord();renderPlan();renderResult();renderCal();
+      calcAndDrawStat('전체');
+    } catch(e) { console.warn('realtime sync (db) failed - 화면은 기존 데이터로 그대로 유지됩니다', e); }
   });
   cloudDB.collection(CLOUD_COLLECTION).doc('qualm_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const result = await loadChunkedDoc('qualm');
-    if(!result) return;
-    const parsed = JSON.parse(result.data || '[]');
-    qualmDB.splice(0, qualmDB.length, ...parsed);
-    renderQualm();
+    try {
+      const result = await loadChunkedDoc('qualm');
+      if(!result) return;
+      const parsed = JSON.parse(result.data || '[]');
+      qualmDB.splice(0, qualmDB.length, ...parsed);
+      renderQualm();
+    } catch(e) { console.warn('realtime sync (qualm) failed', e); }
   });
   cloudDB.collection(CLOUD_COLLECTION).doc('crew_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const result = await loadChunkedDoc('crew');
-    if(!result) return;
-    const parsed = JSON.parse(result.data || '[]');
-    crewDB.splice(0, crewDB.length, ...parsed);
-    renderCrew(); updateCrewDatalist();
+    try {
+      const result = await loadChunkedDoc('crew');
+      if(!result) return;
+      const parsed = JSON.parse(result.data || '[]');
+      crewDB.splice(0, crewDB.length, ...parsed);
+      renderCrew(); updateCrewDatalist();
+    } catch(e) { console.warn('realtime sync (crew) failed', e); }
   });
   cloudDB.collection(CLOUD_COLLECTION).doc('examiner_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
-    const result = await loadChunkedDoc('examiner');
-    if(!result) return;
-    const parsed = JSON.parse(result.data || '[]');
-    examinerDB.splice(0, examinerDB.length, ...parsed);
-    renderExaminer();
+    try {
+      const result = await loadChunkedDoc('examiner');
+      if(!result) return;
+      const parsed = JSON.parse(result.data || '[]');
+      examinerDB.splice(0, examinerDB.length, ...parsed);
+      renderExaminer();
+    } catch(e) { console.warn('realtime sync (examiner) failed', e); }
   });
 }
 
