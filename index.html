@@ -900,6 +900,9 @@ select{font-family:inherit}
             <button class="btn btn-outline btn-sm" onclick="openWebTangoModal()" style="color:#1F6F5C;border-color:#B8DCCF">
               <i class="ti ti-plane-departure" style="font-size:12px"></i> 웹탱고
             </button>
+            <button class="btn btn-outline btn-sm" onclick="restoreFromBackup('db','심사계획/심사결과 데이터')" style="color:#A85454;border-color:#E8C4C4" title="바로 직전 저장 시점으로 되돌려요. 실수로 저장했거나 데이터가 이상해졌을 때 사용">
+              <i class="ti ti-history" style="font-size:12px"></i> 직전 백업 복원
+            </button>
           </div>
         </div>
         <div class="big-month-nav">
@@ -2754,15 +2757,19 @@ function renderResult() {
   }
   const _now = new Date();
   const todayStr = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
-  // 심사계획 관리와 동일하게 SET 짝마다 배지 색을 다르게 줘서 같은 색끼리 짝임을 한눈에 알 수 있게 한다.
-  const SET_BADGE_COLORS = ['#8B5FBF','#4A90A4','#C77A63','#5B8C5A','#B7963E','#A44A6B'];
-  const setColorMap = {};
-  rows.forEach(r=>{ if (r.setId && !(r.setId in setColorMap)) setColorMap[r.setId] = SET_BADGE_COLORS[Object.keys(setColorMap).length % SET_BADGE_COLORS.length]; });
+  // 심사계획 관리와 동일하게 SET 짝마다 배지 색을 다르게 줘서 짝을 구분한다.
+  // ⚠ 예전엔 색만으로 구분했는데, 화면에 SET이 팔레트 색상 수(6개)보다 많이 보이면 색이 겹쳐서
+  // 서로 다른 SET인데 같은 색으로 보이는 문제가 있었다(실제로 이걸로 혼동하신 적 있음). 팔레트를
+  // 넉넉히 늘리고, 무엇보다 배지 안에 "이 화면에서 몇 번째 SET인지" 번호를 같이 표시해서 색이
+  // 우연히 겹쳐도 번호로 확실히 구분되게 했다.
+  const SET_BADGE_COLORS = ['#8B5FBF','#4A90A4','#C77A63','#5B8C5A','#B7963E','#A44A6B','#6B7FD7','#D77A9E','#4FA687','#C99A3E','#7A6BC9','#5FA0C7','#C76B6B','#8FA84F','#B05FA0','#5F8FB0'];
+  const setColorMap = {}, setNumMap = {};
+  rows.forEach(r=>{ if (r.setId && !(r.setId in setColorMap)) { setColorMap[r.setId] = SET_BADGE_COLORS[Object.keys(setColorMap).length % SET_BADGE_COLORS.length]; setNumMap[r.setId] = Object.keys(setNumMap).length + 1; } });
   $('result-tbody').innerHTML = rows.length===0
     ? `<tr><td colspan="14" class="empty-state">해당 조건의 데이터가 없습니다 (${ry}년 ${rm}월)</td></tr>`
     : rows.map((r,i)=>{
         const resCls=r.result==='합격'?'tag-pass':r.result==='불합격'?'tag-fail':'tag-pend';
-        const setBadge=r.setId?`<span class="set-badge" style="font-size:7px;width:13px;height:13px;background:${setColorMap[r.setId]};border-color:${setColorMap[r.setId]}" title="SET 심사 (피심사자 2명 동반) — 같은 색 배지가 세션 짝이에요">S</span> `:'';
+        const setBadge=r.setId?`<span class="set-badge" style="font-size:7px;width:16px;height:13px;background:${setColorMap[r.setId]};border-color:${setColorMap[r.setId]}" title="SET ${setNumMap[r.setId]}번 — 같은 번호가 이 화면에서 세션 짝이에요">S${setNumMap[r.setId]}</span> `:'';
         // 아직 시행 전인 심사는 결과 입력칸을 비활성화 (인정심사는 지식·기량 중 나중 일정 기준)
         const doneDate = examCompletionDate(r);
         const notYet = doneDate && doneDate > todayStr;
@@ -3468,6 +3475,30 @@ async function saveChunkedDoc(baseName, jsonString) {
   const metaRef = cloudDB.collection(CLOUD_COLLECTION).doc(baseName+'_meta');
   const prevMeta = await metaRef.get();
   const prevCount = prevMeta.exists ? (prevMeta.data().chunkCount||0) : 0;
+  // ⚠ 새로 저장하기 전에, 지금 있던 이전 버전을 "직전 백업" 자리로 복사해둔다 — 오늘처럼 저장이
+  // 잘못되더라도 최소 한 단계 전으로는 항상 되돌릴 수 있게 하려고 추가함. 백업은 늘 "가장 최근
+  // 성공했던 저장 직전 상태" 1개만 유지한다(그 전 백업은 덮어써짐). 백업 자체가 실패해도(네트워크
+  // 등) 본 저장은 막지 않고 그냥 경고만 남기고 진행한다 — 백업이 저장을 막아서는 안 되니까.
+  if (prevCount > 0) {
+    try {
+      const backupBase = baseName + '_backup';
+      const backupMetaRef = cloudDB.collection(CLOUD_COLLECTION).doc(backupBase+'_meta');
+      const prevBackupMeta = await backupMetaRef.get();
+      const prevBackupCount = prevBackupMeta.exists ? (prevBackupMeta.data().chunkCount||0) : 0;
+      for (let i=0;i<prevCount;i++){
+        const oldSnap = await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).get();
+        if (oldSnap.exists) {
+          await cloudDB.collection(CLOUD_COLLECTION).doc(`${backupBase}_chunk${i}`).set({data: oldSnap.data().data});
+        }
+      }
+      for (let i=prevCount;i<prevBackupCount;i++){
+        await cloudDB.collection(CLOUD_COLLECTION).doc(`${backupBase}_chunk${i}`).delete().catch(()=>{});
+      }
+      await backupMetaRef.set({chunkCount: prevCount, savedAt: prevMeta.data().savedAt||null});
+    } catch(backupErr) {
+      console.warn('저장 전 백업 실패 - 본 저장은 계속 진행함', backupErr);
+    }
+  }
   const savedAt = new Date().toISOString();
   // ⚠ 조각 하나라도 저장에 실패하면(네트워크 순간 끊김 등) 그 조각만 옛날 내용으로 남은 채
   // chunkCount는 새 값으로 바뀌어, 다음에 불러올 때 중간이 잘린 깨진 데이터가 되는 사고가 있었다.
@@ -3485,13 +3516,33 @@ async function saveChunkedDoc(baseName, jsonString) {
     }
     if (!ok) throw new Error(`"${baseName}" 데이터 저장 중 ${i+1}/${chunks.length}번째 조각이 3번 재시도 후에도 실패했어요: ${lastErr?.message||''}`);
   }
-  // 이전보다 청크 수가 줄었으면 남는 옛 청크 삭제
+  // 이전보다 청크 수가 줄었으면 남는 옛 청크 삭제 (바로 위에서 이미 백업으로 옮겨뒀으니 안전하게 지워도 됨)
   for (let i=chunks.length;i<prevCount;i++){
     await cloudDB.collection(CLOUD_COLLECTION).doc(`${baseName}_chunk${i}`).delete().catch(()=>{});
   }
   await metaRef.set({chunkCount: chunks.length, savedAt});
   return savedAt;
 }
+// 직전 백업으로 되돌리기 — 실수로 잘못 저장했거나, 데이터가 손상된 채로 저장돼버렸을 때 쓰는 비상용.
+// baseName은 'db'/'qualm'/'crew'/'examiner' 중 하나. label은 사용자에게 보여줄 이름.
+async function restoreFromBackup(baseName, label) {
+  const backupBase = baseName + '_backup';
+  const metaSnap = await cloudDB.collection(CLOUD_COLLECTION).doc(backupBase+'_meta').get();
+  if (!metaSnap.exists) { alert(`"${label}"의 백업이 아직 없어요 (이 백업 기능을 추가한 이후 첫 저장부터 쌓이기 시작해요).`); return; }
+  const savedAt = metaSnap.data().savedAt;
+  const dt = savedAt ? new Date(savedAt).toLocaleString('ko-KR') : '알 수 없음';
+  if (!confirm(`"${label}"을(를) 직전 백업(저장 시각: ${dt})으로 되돌릴까요?\n지금 저장되어 있는 내용은 이 백업 내용으로 덮어써져요.`)) return;
+  try {
+    const raw = await loadChunkedDocRaw(backupBase);
+    JSON.parse(raw || '[]'); // 백업 자체가 온전한지 먼저 확인 — 손상된 백업으로 덮어쓰지 않도록
+    await saveChunkedDoc(baseName, raw);
+    alert('복원했어요. 페이지를 새로고침할게요.');
+    location.reload();
+  } catch(e) {
+    alert('복원 실패: ' + e.message);
+  }
+}
+
 
 // 청크로 나뉜 문서를 다시 하나의 JSON 문자열로 합쳐서 불러오기
 // ⚠ 예전엔 청크가 하나 빠져있어도(저장 도중 네트워크 문제 등으로 일부만 실패) 조용히 건너뛰고
@@ -7882,10 +7933,13 @@ renderPlan = function() {
   // 화면에서 사라진 행의 선택 상태는 정리
   const visibleIds = new Set(rows.map(r=>r.id));
   [...planSelectedIds].forEach(id=>{ if(!visibleIds.has(id)) planSelectedIds.delete(id); });
-  // SET 짝마다 배지 색을 다르게 줘서(음영 없이) 같은 색끼리 짝임을 한눈에 알 수 있게 한다.
-  const SET_BADGE_COLORS = ['#8B5FBF','#4A90A4','#C77A63','#5B8C5A','#B7963E','#A44A6B'];
-  const setColorMap = {};
-  rows.forEach(r=>{ if (r.setId && !(r.setId in setColorMap)) setColorMap[r.setId] = SET_BADGE_COLORS[Object.keys(setColorMap).length % SET_BADGE_COLORS.length]; });
+  // SET 짝마다 배지 색을 다르게 줘서(음영 없이) 짝을 구분한다.
+  // ⚠ 팔레트가 6색뿐이라 화면에 SET이 그보다 많으면 색이 겹쳐서 다른 SET인데 같은 색으로 보이는
+  // 문제가 있었다. 팔레트를 늘리고, 배지에 "이 화면에서 몇 번째 SET인지" 번호를 같이 표시해서
+  // 색이 우연히 겹쳐도 번호로 확실히 구분되게 했다.
+  const SET_BADGE_COLORS = ['#8B5FBF','#4A90A4','#C77A63','#5B8C5A','#B7963E','#A44A6B','#6B7FD7','#D77A9E','#4FA687','#C99A3E','#7A6BC9','#5FA0C7','#C76B6B','#8FA84F','#B05FA0','#5F8FB0'];
+  const setColorMap = {}, setNumMap = {};
+  rows.forEach(r=>{ if (r.setId && !(r.setId in setColorMap)) { setColorMap[r.setId] = SET_BADGE_COLORS[Object.keys(setColorMap).length % SET_BADGE_COLORS.length]; setNumMap[r.setId] = Object.keys(setNumMap).length + 1; } });
   const tbody = $('plan-tbody');
   tbody.innerHTML = rows.length===0
     ? `<tr><td colspan="16" class="empty-state">해당 조건의 심사계획이 없습니다</td></tr>`
@@ -7898,7 +7952,7 @@ renderPlan = function() {
         <td>${typeBadgeWithSubtype(r)}</td>
         <td style="font-size:10px;line-height:1.4">${processDisp}</td>
         <td>${acDot(r.ac)}</td><td>${r.qual}</td>
-        <td>${r.empid}</td><td>${r.setId?`<span class="set-badge" style="font-size:7px;width:13px;height:13px;background:${setColorMap[r.setId]};border-color:${setColorMap[r.setId]}" title="SET 심사 (피심사자 2명 동반) — 같은 색 배지가 세션 짝이에요">S</span> `:''}${r.name}</td><td>${planDateDisp(r)}</td><td>${normalizeFlightRoute(r.flight)}</td>
+        <td>${r.empid}</td><td>${r.setId?`<span class="set-badge" style="font-size:7px;width:16px;height:13px;background:${setColorMap[r.setId]};border-color:${setColorMap[r.setId]}" title="SET ${setNumMap[r.setId]}번 — 같은 번호가 이 화면에서 세션 짝이에요">S${setNumMap[r.setId]}</span> `:''}${r.name}</td><td>${planDateDisp(r)}</td><td>${normalizeFlightRoute(r.flight)}</td>
         <td>${examinerDisp(r)}</td><td>${r.place}</td>
         <td style="max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${(r.note||'').replace(/"/g,'&quot;')}">${r.note||'—'}</td>
         <td class="center">
