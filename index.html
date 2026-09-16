@@ -2728,6 +2728,23 @@ function renderResult() {
     const cmp = va.localeCompare(vb, 'ko');
     return resultSortDir==='asc' ? cmp : -cmp;
   });
+  // SET 심사(피심사자 2명이 한 세션에 같이 받는 심사)는 정렬 기준이 뭐든 항상 나란히 붙어 보이도록
+  // 재배치한다 — 심사계획 관리에는 이미 있던 로직인데 심사결과 관리에는 빠져있었다(그래서 같은
+  // SET 번호인데 화면에서 떨어져 보이는 문제가 있었음). 정렬만 믿으면 심사일이 같아도 다른 기준
+  // (이름/심사관 등)으로 정렬할 때 두 사람이 떨어져 보일 수 있어서, 정렬 뒤에 한 번 더 붙여준다.
+  {
+    const seen = new Set();
+    const reordered = [];
+    rows.forEach(r=>{
+      if (seen.has(r.id)) return;
+      reordered.push(r); seen.add(r.id);
+      if (r.setId) {
+        const partner = rows.find(x=>x.setId===r.setId && x.id!==r.id && !seen.has(x.id));
+        if (partner) { reordered.push(partner); seen.add(partner.id); }
+      }
+    });
+    rows = reordered;
+  }
   document.querySelectorAll('#page-result th.sortable').forEach(th=>th.classList.remove('sort-active'));
   const activeTh=[...document.querySelectorAll('#page-result th.sortable')].find(th=>th.getAttribute('ondblclick')?.includes(`'${resultSortCol}'`));
   if(activeTh) activeTh.classList.add('sort-active');
