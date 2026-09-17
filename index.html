@@ -3618,7 +3618,18 @@ async function loadChunkedDoc(baseName) {
   return { data: full, savedAt, chunkCount: count };
 }
 
+// ⚠ (버그 수정) 예전엔 이 함수들에 "지금 저장 중인지" 체크가 전혀 없어서, 사용자가 짧은 시간 안에
+// 두 군데 이상을 수정하면(예: A 결과 비고 수정 직후 B 결과 입력) saveToStorage()가 동시에 두 번
+// 실행됐다. 이때 네트워크 상황(청크당 최대 3회 재시도 등)에 따라 "나중에 시작했지만 먼저 데이터를
+// 담은" 저장보다 "먼저 시작했지만 오래된 데이터를 담은" 저장이 늦게 끝나버리면, Firestore에는
+// 마지막에 도착한 쪽이 그대로 덮어써져서 방금 입력한 새 데이터가 조용히 사라지고 이전 값으로
+// 되돌아가는 사고가 있었다. 아래처럼 "저장 중이면 큐에 표시만 해두고, 끝난 직후 최신 데이터로
+// 딱 한 번 더 저장"하는 구조로 바꿔서, 같은 baseName(db/qualm, examiner, crew)에 대해 절대
+// 두 저장이 동시에 진행되지 않고 항상 가장 최신 상태로 수렴하도록 했다.
+let _dbSaveInFlight = false, _dbSaveQueued = false;
 async function saveToStorage() {
+  if (_dbSaveInFlight) { _dbSaveQueued = true; return; }
+  _dbSaveInFlight = true;
   try {
     _suppressSnapshot = true;
     await saveChunkedDoc('db', JSON.stringify(DB));
@@ -3632,10 +3643,15 @@ async function saveToStorage() {
     alert('⚠️ 클라우드 저장 실패: ' + e.message + '\n\nFirebase 설정(firebaseConfig)을 확인해주세요.');
   } finally {
     setTimeout(()=>{_suppressSnapshot = false;}, 800);
+    _dbSaveInFlight = false;
+    if (_dbSaveQueued) { _dbSaveQueued = false; saveToStorage(); }
   }
 }
 
+let _examinerSaveInFlight = false, _examinerSaveQueued = false;
 async function saveExaminerToCloud() {
+  if (_examinerSaveInFlight) { _examinerSaveQueued = true; return; }
+  _examinerSaveInFlight = true;
   try {
     _suppressSnapshot = true;
     await saveChunkedDoc('examiner', JSON.stringify(examinerDB));
@@ -3644,10 +3660,15 @@ async function saveExaminerToCloud() {
     alert('⚠️ 심사관 데이터 클라우드 저장 실패: ' + e.message);
   } finally {
     setTimeout(()=>{_suppressSnapshot = false;}, 800);
+    _examinerSaveInFlight = false;
+    if (_examinerSaveQueued) { _examinerSaveQueued = false; saveExaminerToCloud(); }
   }
 }
 
+let _crewSaveInFlight = false, _crewSaveQueued = false;
 async function saveCrewToCloud() {
+  if (_crewSaveInFlight) { _crewSaveQueued = true; return; }
+  _crewSaveInFlight = true;
   try {
     _suppressSnapshot = true;
     await saveChunkedDoc('crew', JSON.stringify(crewDB));
@@ -3656,6 +3677,8 @@ async function saveCrewToCloud() {
     alert('⚠️ 운항승무원 데이터 클라우드 저장 실패: ' + e.message);
   } finally {
     setTimeout(()=>{_suppressSnapshot = false;}, 800);
+    _crewSaveInFlight = false;
+    if (_crewSaveQueued) { _crewSaveQueued = false; saveCrewToCloud(); }
   }
 }
 
