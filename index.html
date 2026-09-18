@@ -3800,6 +3800,36 @@ async function loadExaminerFromCloud() {
 
 // ── 실시간 동기화: 다른 담당자가 저장하면 자동으로 화면 갱신 ──
 // 청크가 여러 개라 개별 청크 문서 대신 "_meta" 문서(저장시각/청크수)의 변경을 감지해서 전체를 다시 불러옵니다.
+// ⚠ (버그 수정) 실시간 동기화가 도착할 때마다 테이블을 통째로 innerHTML로 다시 그리는데(renderPlan,
+// renderResult 등), 마침 그 순간 내가 어떤 칸(비고, 결과 입력 등)에 커서를 놓고 타이핑하고 있으면 —
+// 아직 onchange(포커스를 벗어나기 전)가 안 일어나서 그 값이 DB에 반영되기 전인데 — 화면이 통째로
+// 다시 그려지면서 그 입력칸(과 지금까지 타이핑한 내용)이 통째로 사라져버렸다. 이게 "내가 수정하고
+// 있는데 계속 사라진다"의 실제 원인이다(저장이 서로 덮어쓰는 문제와는 별개). DB 데이터 자체는
+// 그대로 최신으로 갱신하되, "지금 어떤 표(tbody) 안의 칸을 편집 중"이면 화면을 다시 그리는 것만
+// 편집이 끝날 때까지(포커스를 벗어날 때까지) 잠깐 미뤄서, 타이핑 중인 내용이 지워지지 않게 한다.
+let _pendingRerenders = [];
+function _isEditingInTable() {
+  const ae = document.activeElement;
+  if (!ae) return false;
+  const tag = ae.tagName;
+  if (tag!=='INPUT' && tag!=='TEXTAREA' && tag!=='SELECT') return false;
+  return !!(ae.closest && ae.closest('tbody'));
+}
+function _rerenderOrDefer(fn) {
+  if (_isEditingInTable()) { if (!_pendingRerenders.includes(fn)) _pendingRerenders.push(fn); }
+  else fn();
+}
+document.addEventListener('focusout', (e)=>{
+  if (!_pendingRerenders.length) return;
+  if (!(e.target && e.target.closest && e.target.closest('tbody'))) return;
+  setTimeout(()=>{
+    if (_isEditingInTable()) return; // 다른 칸으로 옮겨서 계속 편집 중이면 아직 더 미룸
+    const toRun = _pendingRerenders.slice();
+    _pendingRerenders = [];
+    toRun.forEach(fn=>fn());
+  }, 50);
+}, true);
+
 function setupRealtimeSync() {
   cloudDB.collection(CLOUD_COLLECTION).doc('db_meta').onSnapshot(async snap=>{
     if(_suppressSnapshot || !snap.exists) return;
@@ -3808,8 +3838,10 @@ function setupRealtimeSync() {
       if(!result) return;
       const parsed = JSON.parse(result.data || '[]');
       DB.splice(0, DB.length, ...parsed);
-      renderRecord();renderPlan();renderResult();renderCal();
-      calcAndDrawStat('전체');
+      _rerenderOrDefer(()=>{
+        renderRecord();renderPlan();renderResult();renderCal();
+        calcAndDrawStat('전체');
+      });
     } catch(e) { console.warn('realtime sync (db) failed - 화면은 기존 데이터로 그대로 유지됩니다', e); }
   });
   cloudDB.collection(CLOUD_COLLECTION).doc('qualm_meta').onSnapshot(async snap=>{
@@ -3819,7 +3851,7 @@ function setupRealtimeSync() {
       if(!result) return;
       const parsed = JSON.parse(result.data || '[]');
       qualmDB.splice(0, qualmDB.length, ...parsed);
-      renderQualm();
+      _rerenderOrDefer(renderQualm);
     } catch(e) { console.warn('realtime sync (qualm) failed', e); }
   });
   cloudDB.collection(CLOUD_COLLECTION).doc('crew_meta').onSnapshot(async snap=>{
@@ -3829,7 +3861,7 @@ function setupRealtimeSync() {
       if(!result) return;
       const parsed = JSON.parse(result.data || '[]');
       crewDB.splice(0, crewDB.length, ...parsed);
-      renderCrew(); updateCrewDatalist();
+      _rerenderOrDefer(()=>{ renderCrew(); updateCrewDatalist(); });
     } catch(e) { console.warn('realtime sync (crew) failed', e); }
   });
   cloudDB.collection(CLOUD_COLLECTION).doc('examiner_meta').onSnapshot(async snap=>{
@@ -3839,7 +3871,7 @@ function setupRealtimeSync() {
       if(!result) return;
       const parsed = JSON.parse(result.data || '[]');
       examinerDB.splice(0, examinerDB.length, ...parsed);
-      renderExaminer();
+      _rerenderOrDefer(renderExaminer);
     } catch(e) { console.warn('realtime sync (examiner) failed', e); }
   });
 }
